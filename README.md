@@ -41,13 +41,14 @@ c-4
 
 프로젝트 구동에 필요한 핵심 외부 라이브러리 목록입니다. `pip install -r requirements.txt` 명령어로 일괄 설치 가능합니다.
 
-```text
+```
 doosan-robotics>=1.2.0     # 두산 로봇 공식 파이썬 API 프레임워크
 fonttools>=4.38.0          # 벡터 폰트 데이터 추출 및 파싱 유틸리티
 opencv-contrib-python>=4.6 # 일반 TTF/OTF 폰트의 뼈대(Thinning) 추출용 보조 라이브러리
 numpy>=1.22.0              # 3점 평면 기하학 알고리즘, 외적(Cross Product) 연산용
 networkx>=2.8              # 획순 트리 그래프 구조화 및 DFS 탐색 알고리즘용
 matplotlib>=3.5.0          # 로봇 가동 전 우분투 화면 내부 2D 궤적 시각화 및 검증용
+```
 
 ---
 
