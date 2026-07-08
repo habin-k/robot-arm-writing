@@ -7,6 +7,7 @@ class WritingRequest(BaseModel):
     font_name: str = Field("regular", example="regular")
     char_height_mm: float = Field(15.0, ge=5.0, le=50.0, example=15.0)
     margin_mm: float = Field(20.0, ge=0.0, le=50.0, example=20.0)
+    fill_mode: str = Field("outline", description="outline(윤곽선) 또는 hatch(속 채우기)", example="outline")
     skip_surface_detect: bool = Field(False)
 
 

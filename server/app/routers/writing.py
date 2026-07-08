@@ -48,7 +48,23 @@ def execute(req: WritingRequest):
     job_state.current_char = ""
     job_state.error_msg = ""
 
-    # TODO: ROS2 서비스 호출로 교체
+    # 경로 생성 후 ROS2 토픽 발행
+    gen = PathGenerator(
+        font_name=req.font_name,
+        char_height_mm=req.char_height_mm,
+        margin_mm=req.margin_mm,
+    )
+    path = gen.generate(req.text)
+    job_state.total_strokes = sum(
+        1 for i, p in enumerate(path) if p[2] and (i == 0 or not path[i-1][2])
+    )
+
+    from ..core.ros_node import get_ros_node
+    node = get_ros_node()
+    if node is None:
+        raise HTTPException(status_code=503, detail="ROS2 노드가 준비되지 않았습니다.")
+    node.publish_waypoints(path)
+
     return ExecuteResponse(job_id=job_state.job_id, status=job_state.status)
 
 
@@ -57,7 +73,10 @@ def cancel():
     if job_state.status != "writing":
         raise HTTPException(status_code=400, detail="진행 중인 작업이 없습니다.")
     job_state.status = "cancelled"
-    # TODO: ROS2 cancel 서비스 호출
+    from ..core.ros_node import get_ros_node
+    node = get_ros_node()
+    if node:
+        node.publish_emergency_stop(True)
     return {"message": "작업이 취소됐습니다."}
 
 

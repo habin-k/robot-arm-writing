@@ -4,8 +4,9 @@ from typing import Literal, Optional
 
 class JogRequest(BaseModel):
     axis: Literal["x", "y", "z", "rx", "ry", "rz"] = Field(..., example="z")
-    direction: Literal[1, -1] = Field(..., example=-1)
-    step_mm: float = Field(5.0, ge=0.1, le=100.0, example=5.0)
+    direction: Literal[1, -1] = Field(1, example=-1)
+    moving: bool = Field(True, description="True=이동 시작, False=정지", example=True)
+    speed: float = Field(30.0, ge=1.0, le=100.0, description="조그 속도 (mm/s 또는 deg/s)", example=30.0)
 
 
 class RobotStatus(BaseModel):

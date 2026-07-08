@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 import asyncio
 
@@ -15,11 +15,17 @@ class JobState:
 job_state = JobState()
 
 # WebSocket 클라이언트 관리
-progress_clients: set = field(default_factory=set)
-robot_clients: set = field(default_factory=set)
-
 progress_clients = set()
 robot_clients = set()
+
+# FastAPI 이벤트 루프 참조 (ROS 스레드에서 브로드캐스트를 예약하기 위함)
+event_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+def schedule_broadcast():
+    """ROS 콜백(다른 스레드)에서 FastAPI 이벤트 루프에 브로드캐스트를 예약한다."""
+    if event_loop is not None:
+        asyncio.run_coroutine_threadsafe(broadcast_progress(), event_loop)
 
 
 async def broadcast_progress():
