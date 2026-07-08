@@ -1,0 +1,180 @@
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto auto;
+  gap: 16px;
+  align-content: start;
+  flex: 1;
+}
+
+/* 상태 카드 - 전체 너비 */
+.cardFull {
+  grid-column: 1 / -1;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 24px;
+}
+
+.card {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 24px;
+}
+
+.cardTitle {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #555;
+  margin-bottom: 16px;
+}
+
+.statusBig {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.statusDot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.jobId {
+  font-size: 11px;
+  color: #444;
+  margin-top: 8px;
+  font-family: monospace;
+}
+
+.pctRow {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.pctNum {
+  font-size: 64px;
+  font-weight: 700;
+  color: #ececec;
+  line-height: 1;
+}
+
+.pctUnit {
+  font-size: 24px;
+  color: #555;
+  font-weight: 300;
+}
+
+.progressBar {
+  height: 5px;
+  background: #2a2a2a;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.detailItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detailLabel {
+  font-size: 11px;
+  color: #555;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.detailValue {
+  font-size: 22px;
+  font-weight: 600;
+  color: #ececec;
+}
+
+.errorMsg {
+  margin-top: 14px;
+  font-size: 13px;
+  color: #ef4444;
+  padding: 12px 14px;
+  background: #2a1515;
+  border-radius: 7px;
+  border: 1px solid #3a1f1f;
+}
+
+.connRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.connDot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: pulse 2.5s infinite;
+}
+
+.connText {
+  font-size: 14px;
+  color: #aaa;
+}
+
+.connSub {
+  font-size: 12px;
+  color: #444;
+  margin-top: 4px;
+}
+
+/* 마지막 작업 */
+.lastJobGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.lastJobItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: #111;
+  border-radius: 7px;
+}
+
+.lastJobLabel {
+  font-size: 10px;
+  color: #444;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lastJobValue {
+  font-size: 14px;
+  color: #ececec;
+  font-weight: 500;
+}
