@@ -1,0 +1,163 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: #111;
+  color: #ececec;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#root { height: 100vh; }
+
+.app {
+  display: flex;
+  height: 100vh;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: #0d0d0d;
+  border-right: 1px solid #2a2a2a;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 8px;
+}
+
+.sidebarTop {
+  padding: 8px 10px 16px;
+  border-bottom: 1px solid #2a2a2a;
+  margin-bottom: 8px;
+}
+
+.sidebarLogo {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ececec;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebarLogo::before {
+  content: '';
+  display: inline-block;
+  width: 20px; height: 20px;
+  background: #ececec;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.sidebarSection {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.sidebarLabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: #555;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 12px 10px 4px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #888;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.1s, color 0.1s;
+}
+.navItem:hover { background: #1a1a1a; color: #ccc; }
+.navItemActive { background: #1f1f1f !important; color: #ececec !important; }
+
+.navIcon { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
+
+.navLock {
+  margin-left: auto;
+  font-size: 10px;
+  color: #444;
+}
+
+.sidebarBottom {
+  border-top: 1px solid #2a2a2a;
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+.adminBadge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: #555;
+}
+
+.adminBadgeDot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  flex-shrink: 0;
+}
+
+.logoutBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #666;
+  font-size: 13px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.logoutBtn:hover { color: #ef4444; background: #1a1a1a; }
+
+/* ── Main ── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #111;
+}
+
+.pageHeader {
+  padding: 24px 32px 16px;
+  flex-shrink: 0;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.pageTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: #ececec;
+}
+
+.pageContent {
+  flex: 1;
+  overflow: hidden;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+}

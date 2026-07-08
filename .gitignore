@@ -1,0 +1,34 @@
+# Node / 프론트엔드
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ROS2 빌드 산출물
+build/
+install/
+log/
+
+# 환경변수 (실제 비밀값 — .env.example 만 커밋)
+.env
+*.env
+!.env.example
+
+# 임시 파일
+*.csv
+*.log
+
+# 편집기
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
