@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 from onrobot_rg_msgs.msg import OnRobotRGInput
 import time
 import DR_init
@@ -29,6 +29,8 @@ class TaskStateNode(Node):
         self.gripper_width_seq = 0
 
         self.robot_state = RobotState.IDLE
+        self.robot_state_pub = self.create_publisher(String, '/task_manager/state', 10)
+        self.robot_state_timer = self.create_timer(0.5, self.publish_robot_state)
         
         self.paper_sub = self.create_subscription(
             Bool, 
@@ -54,6 +56,18 @@ class TaskStateNode(Node):
         self.gripper_width = msg.gwdf / 10.0
         # 그리퍼 메시지 갱신 여부 추가
         self.gripper_width_seq += 1
+
+    def publish_robot_state(self):
+        msg = String()
+        msg.data = self.robot_state.value
+        self.robot_state_pub.publish(msg)
+
+    def set_robot_state(self, state):
+        if self.robot_state == state:
+            return
+
+        self.robot_state = state
+        self.publish_robot_state()
         
          
 class TaskManager:
@@ -156,7 +170,7 @@ class TaskManager:
         return True
     
     def write(self):
-        pass
+        self.node.get_logger().info("글쓰기 기능 통합 전. 다음 단계로 넘어갑니다.")
     
     def return_pen(self):
         self.node.get_logger().info("펜 복귀")
@@ -175,6 +189,10 @@ class TaskManager:
         self.wait(0.5)
         self.grip()
         return True
+    
+    def is_stamp_present(self):
+        pass
+    
     
     def stamp(self):
         # fd = [0, 0, -20, 0, 0, 0]
@@ -278,12 +296,12 @@ class TaskManager:
 
             self.eject_paper()
             self.go_home()
-            self.node.robot_state = RobotState.IDLE
+            self.node.set_robot_state(RobotState.IDLE)
 
         except Exception as e:
             self.node.get_logger().error(f"작업 중단: {e}")
             self.node.get_logger().error("관리자 수동 복구 모드로 진입합니다. Reset 필요.")
-            self.node.robot_state = RobotState.MANUAL_REQUIRED # 관리자 수동 모드 진입 # RobotState 클래스 정의 시 구현
+            self.node.set_robot_state(RobotState.MANUAL_REQUIRED) # 관리자 수동 모드 진입 # RobotState 클래스 정의 시 구현
 
         
         finally:
@@ -313,7 +331,7 @@ def main(args=None):
 
             if node.start_task and node.robot_state == RobotState.IDLE:
                 node.start_task = False
-                node.robot_state = RobotState.RUNNING
+                node.set_robot_state(RobotState.RUNNING)
                 sequencer.run_once()
             else:
                 time.sleep(0.1)
