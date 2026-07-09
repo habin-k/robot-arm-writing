@@ -110,71 +110,71 @@ class TaskManager:
     def grip_pen(self):
         self.node.get_logger().info("펜 파지")
         self.movej(self.posj(0, 0, 90, 0, 90, 0), vel=30, acc=30)
-        self.movel(self.posx(303, 9, 197, 90, 180, 0), vel=VEL, acc=ACC)   
-        self.movel(self.posx(0, 0, -60, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)   
+        self.movel(self.posx(237, -28, 197, 90, 180, 0), vel=VEL, acc=ACC)   
+        self.movel(self.posx(237, -28, 108.5, 90, 180, 0), vel=VEL, acc=ACC)  #mod=self.DR_MV_MOD_REL, ref=self.DR_BASE   
         self.grip()
+        self.wait(0.5)
         return True
     
     def return_pen(self):
         self.node.get_logger().info("펜 복귀")
-        self.movej(self.posj(0, 0, 90, 0, 90, 0), vel=30, acc=30)
-        self.movel(self.posx(303, 9, 197, 90, 180, 0), vel=VEL, acc=ACC)
-        self.movel(self.posx(0, 0, -60, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
+        self.movel(self.posx(0, 0, 80, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
+        self.movel(self.posx(237, -28, 197, 90, 180, 0), vel=VEL, acc=ACC)  
+        self.movel(self.posx(237, -28, 108.5, 90, 180, 0), vel=VEL, acc=ACC)
         self.wait(0.5)
         self.ungrip()
         return True
 
     def grip_stamp(self):
         self.node.get_logger().info("도장 파지")
-        self.movej(self.posj(0, 0, 90, 0, 90, 0), vel=30, acc=30)
-        self.movel(self.posx(305, 103, 197, 90, 180, 0), vel=VEL, acc=ACC)
-        self.movel(self.posx(305, 103, 33, 90, 180, 0), vel=VEL, acc=ACC)
+        self.movel(self.posx(0, 0, 130, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
+        self.movel(self.posx(242, 72, 110, 90, 180, 0), vel=VEL, acc=ACC)
+        self.movel(self.posx(242, 72, 33.02, 90, 180, 0), vel=VEL, acc=ACC)
         self.wait(0.5)
         self.grip()
         return True
     
     def stamp(self):
-        fd = [0, 0, -20, 0, 0, 0]
-        fctrl_dir = [0, 0, 1, 0, 0, 0]
+        # fd = [0, 0, -20, 0, 0, 0]
+        # fctrl_dir = [0, 0, 1, 0, 0, 0]
 
         self.node.get_logger().info("도장 찍기")
-        self.movej(self.posj(0, 0, 90, 0, 90, 0), vel=30, acc=30)
-        self.movel(self.posx(305, 103, 130, 90, 180, 0), vel=VEL, acc=ACC)
+        self.movel(self.posx(0, 0, 100, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
         self.movel(self.posx(527, 99, 130, 90, 180, 0), vel=VEL, acc=ACC)
-        self.movel(self.posx(527, 99, 120, 90, 180, 0), vel=VEL, acc=ACC)
-        self.wait(0.5)
-        self.task_compliance_ctrl([2000, 2000, 500, 200, 200, 200])
-        self.wait(1)
-        self.set_desired_force(fd, fctrl_dir, mod=self.DR_FC_MOD_REL)
-        self.wait(1)
-        self.release_force()
-        self.wait(0.5)
-        self.release_compliance_ctrl()
-        self.wait(0.5)
+        self.movel(self.posx(527, 99, 78, 90, 180, 0), vel=VEL, acc=ACC)
+        # self.wait(0.5)
+        # self.task_compliance_ctrl([2000, 2000, 500, 200, 200, 200])
+        # self.wait(1)
+        # self.set_desired_force(fd, fctrl_dir, mod=self.DR_FC_MOD_REL)
+        # self.wait(1)
+        # self.release_force()
+        # self.wait(0.5)
+        # self.release_compliance_ctrl()
+        # self.wait(0.5)
         self.movel(self.posx(527, 99, 100, 90, 180, 0), vel=VEL, acc=ACC)
         return True
 
     def return_stamp(self):
-        fd = [0, 0, -20, 0, 0, 0]
-        fctrl_dir = [0, 0, 1, 0, 0, 0]
+        # fd = [0, 0, -20, 0, 0, 0]
+        # fctrl_dir = [0, 0, 1, 0, 0, 0]
 
         self.node.get_logger().info("도장 복귀")
         self.movel(self.posx(527, 99, 130, 90, 180, 0), vel=VEL, acc=ACC)
-        self.movel(self.posx(305, 103, 130, 90, 180, 0), vel=VEL, acc=ACC)
-        self.movel(self.posx(305, 103, 33, 90, 180, 0), vel=VEL, acc=ACC)
-        self.wait(0.5)
-        self.task_compliance_ctrl([2000, 2000, 500, 200, 200, 200])
-        self.wait(1)
-        self.set_desired_force(fd, fctrl_dir, mod=self.DR_FC_MOD_REL)
-        self.wait(1)
-        self.release_force()
-        self.wait(0.5)
-        self.release_compliance_ctrl()
+        self.movel(self.posx(242, 72, 130, 90, 180, 0), vel=VEL, acc=ACC)
+        self.movel(self.posx(242, 72, 33, 90, 180, 0), vel=VEL, acc=ACC)
+        # self.wait(0.5)
+        # self.task_compliance_ctrl([2000, 2000, 500, 200, 200, 200])
+        # self.wait(1)
+        # self.set_desired_force(fd, fctrl_dir, mod=self.DR_FC_MOD_REL)
+        # self.wait(1)
+        # self.release_force()
+        # self.wait(0.5)
+        # self.release_compliance_ctrl()
         self.wait(0.5)
         self.ungrip()
         return True
     
-    def is_gripped(self):
+    def is_gripped(self, label):
         width = self.node.gripper_width
         
         if width is None:
@@ -182,19 +182,19 @@ class TaskManager:
             return False
 
         if width < 10:
-            self.node.get_logger().error(f"파지 실패: width={width:.2f}")
-            return False
+            raise RuntimeError(f"{label} 파지 실패: width={width:.2f}")
         
         self.node.get_logger().info(f"파지 확인: width={width:.2f}")
         return True
 
     def eject_paper(self):
-        fd = [0, 0, -0.1, 0, 0, 0]
+        fd = [0, 0, -0.5, 0, 0, 0]
         fctrl_dir = [0, 0, 1, 0, 0, 0]
 
         self.node.get_logger().info("종이 배출 테스트 시작")
-        self.movel(self.posx(462, -4, 197, 90, 180, 90), vel=VEL, acc=ACC)
-        self.movel(self.posx(462, -4, 75, 90, 180, 90), vel=VEL, acc=ACC)
+        self.movel(self.posx(0, 0, 100, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
+        self.movel(self.posx(462, 80, 100, 90, 180, 90), vel=VEL, acc=ACC)
+        self.movel(self.posx(462, 80, 65, 90, 180, 90), vel=VEL, acc=ACC)
         self.wait(0.5)
         self.task_compliance_ctrl([2000, 2000, 500, 200, 200, 200])
         self.wait(1)
@@ -206,7 +206,7 @@ class TaskManager:
         self.wait(0.5)
         self.release_compliance_ctrl()
         self.wait(0.5)
-        self.movej(self.posj(0, 0, 90, 0, 90, 0), vel=30, acc=30)
+        # self.movej(self.posj(0, 0, 90, 0, 90, 0), vel=30, acc=30)
         self.node.get_logger().info("종이 배출 완료")
         return True
     
@@ -216,13 +216,25 @@ class TaskManager:
     
 
     def run_once(self):
-        self.grip_pen()
-        self.return_pen()
-        self.grip_stamp()
-        self.stamp()
-        self.return_stamp()
-        self.eject_paper()
-        self.return_home()
+        try:
+            self.grip_pen()
+            self.is_gripped("펜")  
+            self.return_pen()
+
+            self.grip_stamp()
+            self.is_gripped("도장")          
+            self.stamp()
+            self.return_stamp()
+
+            self.eject_paper()
+            self.return_home()
+
+        except Exception as e:
+            self.node.get_logger().error(f"작업 중단: {e}")
+            # self.enter_manual_required() # 관리자 수동 모드 진입 # RobotState 클래스 정의 시 구현
+        
+        finally:
+            pass
 
 
 
@@ -236,6 +248,10 @@ def main(args=None):
     DR_init.__dsr__node = node
     
     sequencer = TaskManager(node)
+
+    sequencer.set_tool("GripperDA_v1")
+    sequencer.set_tcp("Tool Weight")
+    
     node.get_logger().info("task_manager_new 시작")
     
     try:
