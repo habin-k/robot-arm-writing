@@ -464,7 +464,7 @@ class PenWriter:
         self._progress(0, total)               # 시작 시 전체 획 수 알림 (진행바 0%)
 
         self._contact_z = None                 # 새 작업마다 접촉 z 재감지 (종이가 바뀌었을 수 있음)
-        self._go_home()                        # 시작 전 홈 복귀
+        # self._go_home()                        # 시작 전 홈 복귀
 
         for n, stroke in enumerate(strokes, 1):
             if self.state.get('emergency'):
@@ -476,7 +476,7 @@ class PenWriter:
             self._progress(n, total)           # 획 완료마다 진행 갱신
             self.log.info(f"  획 {n}/{total} 완료")
 
-        self._go_home()                        # 끝난 뒤 홈 복귀
+        # self._go_home()                      # 끝난 뒤 홈 복귀
         self.publish_status("IDLE")
         self.log.info("글쓰기 완료")
 
