@@ -9,9 +9,26 @@ const BASE_URL = `${window.location.protocol}//${window.location.hostname}:${SER
 
 export const api = axios.create({ baseURL: BASE_URL })
 
+// 로그인 토큰은 sessionStorage 에 보관한다.
+// → 새로고침해도 유지되고, 창(탭)을 완전히 닫으면 사라진다 (브라우저 세션과 동일한 동작).
+const TOKEN_KEY = 'authToken'
+
+export const getStoredToken = () => sessionStorage.getItem(TOKEN_KEY)
+
 export const setAuthToken = (token) => {
-  if (token) api.defaults.headers.common['Authorization'] = `Bearer ${token}`
-  else delete api.defaults.headers.common['Authorization']
+  if (token) {
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    sessionStorage.setItem(TOKEN_KEY, token)
+  } else {
+    delete api.defaults.headers.common['Authorization']
+    sessionStorage.removeItem(TOKEN_KEY)
+  }
+}
+
+// 새로고침 직후 App 이 마운트되기 전에도 요청에 토큰이 실리도록, 모듈 로드 시 복원한다.
+{
+  const stored = getStoredToken()
+  if (stored) api.defaults.headers.common['Authorization'] = `Bearer ${stored}`
 }
 
 export const WS_URL = BASE_URL.replace('http', 'ws')

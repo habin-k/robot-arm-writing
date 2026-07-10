@@ -6,17 +6,18 @@
   justify-content: center;
   gap: 10px;
   padding: 16px;
-  background: #ef4444;
+  background: var(--danger);
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius);
   color: #fff;
   font-size: 16px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.1s;
   letter-spacing: 0.02em;
+  box-shadow: 0 1px 2px rgba(214, 69, 48, 0.25);
 }
-.estop:hover { background: #dc2626; }
+.estop:hover { background: var(--danger-2); }
 
 .grid {
   display: grid;
@@ -25,10 +26,11 @@
 }
 
 .card {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 10px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   padding: 20px;
+  box-shadow: 0 1px 2px rgba(23, 25, 28, 0.04);
 }
 
 .cardTitle {
@@ -36,14 +38,14 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #555;
+  color: var(--ink-soft);
   margin-bottom: 14px;
 }
 
 .jogHint {
   text-transform: none;
   letter-spacing: 0;
-  color: #444;
+  color: var(--ink-faint);
   font-weight: 400;
   margin-left: 6px;
 }
@@ -57,9 +59,9 @@
   width: 100%;
   padding: 11px 14px;
   border-radius: 7px;
-  border: 1px solid #2a2a2a;
-  background: #111;
-  color: #aaa;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink-soft);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -68,7 +70,7 @@
   text-align: left;
 }
 .actionBtn:last-child { margin-bottom: 0; }
-.actionBtn:hover { border-color: #555; color: #ececec; background: #1f1f1f; }
+.actionBtn:hover { border-color: var(--ink-soft); color: var(--ink); background: var(--hover); }
 
 .stepRow { display: flex; gap: 6px; margin-bottom: 14px; }
 
@@ -76,15 +78,16 @@
   flex: 1;
   padding: 7px;
   border-radius: 6px;
-  border: 1px solid #2a2a2a;
-  background: #111;
-  color: #666;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink-soft);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.1s;
 }
-.stepBtnActive { background: #ececec; border-color: #ececec; color: #111; }
+.stepBtn:hover { border-color: var(--ink-soft); color: var(--ink); }
+.stepBtnActive { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 
 .dpad {
   display: grid;
@@ -98,16 +101,16 @@
   font-size: 12px;
   font-weight: 700;
   border-radius: 7px;
-  border: 1px solid #2a2a2a;
-  background: #111;
-  color: #aaa;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink-soft);
   cursor: pointer;
   transition: all 0.1s;
 }
-.dpadBtn:hover { background: #ececec; color: #111; border-color: #ececec; }
+.dpadBtn:hover { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .dpadBtn:active { transform: scale(0.93); }
 
-.dpadCenter { border-radius: 50%; background: #222; }
+.dpadCenter { border-radius: 50%; background: var(--line); }
 
 .zRow { display: flex; gap: 4px; }
 .zRow .dpadBtn { width: 52px; height: 52px; }
@@ -117,17 +120,73 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #555;
+  color: var(--ink-soft);
   margin-bottom: 8px;
   display: block;
 }
 
 .feedback {
   font-size: 12px;
-  color: #22c55e;
+  color: var(--ok);
   padding: 8px 12px;
-  background: #0f2318;
+  background: #ecfdf3;
   border-radius: 6px;
-  border: 1px solid #1a3a28;
+  border: 1px solid #c3ecd4;
   margin-top: 8px;
+}
+
+.gripRow { display: flex; gap: 8px; }
+.gripRow .actionBtn { flex: 1; justify-content: center; }
+
+/* 로봇 상태 카드: WebSocket 연결 표시 점 */
+.cardTitle { display: flex; align-items: center; }
+.wsDot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--ink-ghost);
+  margin-left: 8px;
+}
+.wsOn { background: var(--ok); }
+
+/* User_102 좌표/외력 그리드 (3열) */
+.coordGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+/* 좌표/외력 구획 소제목 */
+.coordSubTitle {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  margin: 2px 0 8px;
+}
+.coordCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--paper-sunk);
+}
+.coordAxis {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+.coordVal {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.coordUnit {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--ink-faint);
+  margin-left: 3px;
 }

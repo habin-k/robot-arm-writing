@@ -1,19 +1,21 @@
 .overlay {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,0.7);
+  background: rgba(23, 25, 28, 0.35);
+  backdrop-filter: blur(2px);
   display: flex; align-items: center; justify-content: center;
   z-index: 100;
 }
 
 .modal {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
+  background: var(--paper);
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 28px;
   width: 340px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  box-shadow: 0 24px 60px rgba(23, 25, 28, 0.18);
 }
 
 .header {
@@ -23,20 +25,21 @@
 }
 
 .title {
-  font-size: 16px;
+  font-family: var(--font-display);
+  font-size: 17px;
   font-weight: 600;
-  color: #ececec;
+  color: var(--ink);
 }
 
 .closeBtn {
   background: none;
   border: none;
-  color: #555;
+  color: var(--ink-faint);
   font-size: 14px;
   cursor: pointer;
   padding: 4px;
 }
-.closeBtn:hover { color: #aaa; }
+.closeBtn:hover { color: var(--ink); }
 
 .field { display: flex; flex-direction: column; gap: 6px; }
 
@@ -45,37 +48,37 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #555;
+  color: var(--ink-soft);
 }
 
 .input {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   padding: 10px 12px;
-  border: 1px solid #2a2a2a;
+  border: 1px solid var(--line-strong);
   border-radius: 7px;
-  background: #111;
-  color: #ececec;
+  background: var(--paper);
+  color: var(--ink);
   transition: border-color 0.15s;
 }
-.input:focus { outline: none; border-color: #555; }
+.input:focus { outline: none; border-color: var(--ink); }
 
 .error {
   font-size: 12px;
-  color: #ef4444;
+  color: var(--danger);
   margin: 0;
 }
 
 .btn {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   padding: 11px;
   border-radius: 7px;
   border: none;
-  background: #ececec;
-  color: #111;
+  background: var(--ink);
+  color: var(--paper);
   cursor: pointer;
   transition: background 0.1s;
 }
-.btn:hover:not(:disabled) { background: #ccc; }
+.btn:hover:not(:disabled) { background: #2b2e34; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }

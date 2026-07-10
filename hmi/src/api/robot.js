@@ -9,3 +9,7 @@ export const emergencyStop = () => api.post('/robot/emergency-stop')
 export const errorReset = () => api.post('/robot/error-reset')
 
 export const jog = (data) => api.post('/robot/jog', data)
+
+export const grip = () => api.post('/robot/grip')
+
+export const ungrip = () => api.post('/robot/ungrip')

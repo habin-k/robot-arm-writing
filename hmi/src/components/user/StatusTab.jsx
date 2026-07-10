@@ -5,14 +5,15 @@ const STATUS_LABEL = {
   idle: '대기 중', writing: '쓰는 중', done: '완료',
   error: '오류', cancelled: '취소됨',
 }
+// 토큰 팔레트와 일치 (--ink-faint / --ok / --info / --danger)
 const STATUS_COLOR = {
-  idle: '#555', writing: '#22c55e', done: '#3b82f6',
-  error: '#ef4444', cancelled: '#555',
+  idle: '#9297a0', writing: '#1f9d57', done: '#2f6bd8',
+  error: '#d64530', cancelled: '#9297a0',
 }
 
 export default function StatusTab() {
   const { progress, connected } = useProgress()
-  const color = STATUS_COLOR[progress.status] || '#555'
+  const color = STATUS_COLOR[progress.status] || '#9297a0'
   const isWriting = progress.status === 'writing'
 
   return (

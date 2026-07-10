@@ -1,6 +1,6 @@
 .layout {
   display: grid;
-  grid-template-columns: 380px 1fr;
+  grid-template-columns: minmax(460px, 1.25fr) minmax(0, 0.75fr);
   gap: 24px;
   flex: 1;
   overflow: hidden;
@@ -16,11 +16,12 @@
 }
 
 .card {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 10px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   padding: 18px;
   flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(23, 25, 28, 0.04);
 }
 
 .field { display: flex; flex-direction: column; gap: 8px; }
@@ -30,14 +31,14 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #555;
+  color: var(--ink-soft);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .valueTag {
-  color: #ececec;
+  color: var(--ink);
   font-weight: 700;
   text-transform: none;
   letter-spacing: 0;
@@ -45,11 +46,11 @@
 }
 
 .textarea {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
-  color: #ececec;
-  background: #111;
-  border: 1px solid #2a2a2a;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
   border-radius: 7px;
   padding: 12px;
   resize: vertical;
@@ -57,8 +58,21 @@
   transition: border-color 0.15s;
   line-height: 1.5;
 }
-.textarea:focus { outline: none; border-color: #555; }
-.textarea::placeholder { color: #3a3a3a; }
+.textarea:focus { outline: none; border-color: var(--ink); }
+.textarea::placeholder { color: var(--ink-ghost); }
+
+.input {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  padding: 10px 12px;
+  transition: border-color 0.15s;
+}
+.input:focus { outline: none; border-color: var(--ink); }
+.input::placeholder { color: var(--ink-ghost); }
 
 .fontGrid { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -66,22 +80,22 @@
   font-size: 12px;
   padding: 5px 12px;
   border-radius: 5px;
-  border: 1px solid #2a2a2a;
-  background: #111;
-  color: #666;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink-soft);
   cursor: pointer;
   transition: all 0.1s;
 }
-.fontBtn:hover { border-color: #555; color: #ccc; }
-.fontBtnActive { background: #ececec; border-color: #ececec; color: #111; font-weight: 600; }
+.fontBtn:hover { border-color: var(--ink-soft); color: var(--ink); }
+.fontBtnActive { background: var(--ink); border-color: var(--ink); color: var(--paper); font-weight: 600; }
 
-.slider { width: 100%; accent-color: #ececec; cursor: pointer; }
+.slider { width: 100%; accent-color: var(--ink); cursor: pointer; }
 
 .sliderLabels {
   display: flex;
   justify-content: space-between;
   font-size: 10px;
-  color: #444;
+  color: var(--ink-faint);
   margin-top: 2px;
 }
 
@@ -92,13 +106,14 @@
   font-size: 12px;
   padding: 8px;
   border-radius: 6px;
-  border: 1px solid #2a2a2a;
-  background: #111;
-  color: #666;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink-soft);
   cursor: pointer;
   transition: all 0.1s;
 }
-.toggleBtnActive { background: #ececec; border-color: #ececec; color: #111; font-weight: 600; }
+.toggleBtn:hover { border-color: var(--ink-soft); color: var(--ink); }
+.toggleBtnActive { background: var(--ink); border-color: var(--ink); color: var(--paper); font-weight: 600; }
 
 .switchRow {
   display: flex;
@@ -107,30 +122,56 @@
   margin-top: 14px;
 }
 
-.switchLabel { font-size: 13px; color: #aaa; }
+.switchLabel { font-size: 13px; color: var(--ink-soft); }
 
 .switch {
   width: 36px; height: 20px;
   border-radius: 10px;
   border: none;
-  background: #2a2a2a;
+  background: var(--line-strong);
   cursor: pointer;
   position: relative;
   transition: background 0.2s;
   flex-shrink: 0;
   padding: 0;
 }
-.switchOn { background: #22c55e; }
+.switchOn { background: var(--ok); }
 .switchKnob {
   position: absolute;
   top: 2px; left: 2px;
   width: 16px; height: 16px;
   border-radius: 50%;
   background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   transition: transform 0.2s;
   display: block;
 }
 .switchOn .switchKnob { transform: translateX(16px); }
+
+/* 종이 감지 표시 (글씨 쓰기 실행 전 확인용) */
+.paperRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.paperLabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.paperBadge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 14px;
+  border-radius: 20px;
+  background: var(--paper-sunk);
+  color: var(--ink-faint);
+  border: 1px solid var(--line);
+}
+.paperOk   { background: #ecfdf3; color: var(--ok);     border-color: #c3ecd4; }
+.paperNone { background: #fdeceb; color: var(--danger); border-color: #f3cfcb; }
 
 .actions { display: flex; gap: 8px; flex-shrink: 0; }
 
@@ -140,14 +181,14 @@
   font-weight: 600;
   padding: 11px;
   border-radius: 7px;
-  border: 1px solid #2a2a2a;
-  background: transparent;
-  color: #888;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink-soft);
   cursor: pointer;
   transition: all 0.1s;
 }
-.btnPreview:hover:not(:disabled) { border-color: #555; color: #ececec; }
-.btnPreview:disabled { opacity: 0.3; cursor: not-allowed; }
+.btnPreview:hover:not(:disabled) { border-color: var(--ink); color: var(--ink); }
+.btnPreview:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .btnExecute {
   flex: 1;
@@ -156,13 +197,13 @@
   padding: 11px;
   border-radius: 7px;
   border: none;
-  background: #ececec;
-  color: #111;
+  background: var(--ink);
+  color: var(--paper);
   cursor: pointer;
   transition: background 0.1s;
 }
-.btnExecute:hover:not(:disabled) { background: #ccc; }
-.btnExecute:disabled { opacity: 0.3; cursor: not-allowed; }
+.btnExecute:hover:not(:disabled) { background: #2b2e34; }
+.btnExecute:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .btnCancel {
   flex: 1;
@@ -171,27 +212,27 @@
   padding: 11px;
   border-radius: 7px;
   border: none;
-  background: #ef4444;
+  background: var(--danger);
   color: #fff;
   cursor: pointer;
   transition: background 0.1s;
 }
-.btnCancel:hover { background: #dc2626; }
+.btnCancel:hover { background: var(--danger-2); }
 
 .progressHeader { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .statusDot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.dot_idle      { background: #444; }
-.dot_writing   { background: #22c55e; animation: pulse 1.2s infinite; }
-.dot_done      { background: #3b82f6; }
-.dot_error     { background: #ef4444; }
-.dot_cancelled { background: #444; }
+.dot_idle      { background: var(--ink-faint); }
+.dot_writing   { background: var(--ok); animation: pulse 1.2s infinite; }
+.dot_done      { background: var(--info); }
+.dot_error     { background: var(--danger); }
+.dot_cancelled { background: var(--ink-faint); }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-.statusText { font-size: 13px; color: #aaa; }
-.progressPct { margin-left: auto; font-size: 14px; font-weight: 700; color: #ececec; }
-.progressBar { height: 3px; background: #2a2a2a; border-radius: 2px; overflow: hidden; margin-bottom: 8px; }
-.progressFill { height: 100%; background: #ececec; transition: width 0.4s ease; }
-.progressDetail { font-size: 11px; color: #555; }
-.errorMsg { font-size: 12px; color: #ef4444; margin-top: 6px; }
+.statusText { font-size: 13px; color: var(--ink-soft); }
+.progressPct { margin-left: auto; font-size: 14px; font-weight: 700; color: var(--ink); }
+.progressBar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; margin-bottom: 8px; }
+.progressFill { height: 100%; background: var(--ink); transition: width 0.4s ease; }
+.progressDetail { font-size: 11px; color: var(--ink-soft); }
+.errorMsg { font-size: 12px; color: var(--danger); margin-top: 6px; }
 
 /* 캔버스 영역 */
 .canvasArea {
@@ -202,14 +243,34 @@
   overflow: hidden;
 }
 
+/* 우측 상단 정보 (종이 감지 · 작업 상태) */
+.topInfo {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.infoCard {
+  flex: 1;
+  min-width: 0;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: 0 1px 2px rgba(23, 25, 28, 0.04);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 .canvasBox {
   flex: 1;
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 10px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   overflow: hidden;
-  /* A4 landscape 비율 유지, 부모 높이에 맞춤 */
-  max-width: calc((100vh - 180px) * 295.57 / 209.72);
+  box-shadow: 0 1px 3px rgba(23, 25, 28, 0.06);
+  /* A4 landscape 비율 유지, 부모 높이에 맞춤 (상단 정보 카드 높이만큼 여유를 뺌) */
+  max-width: calc((100vh - 250px) * 295.57 / 209.72);
   aspect-ratio: 295.57 / 209.72;
   align-self: flex-start;
   width: 100%;
@@ -219,7 +280,7 @@
   display: flex;
   gap: 20px;
   font-size: 11px;
-  color: #444;
+  color: var(--ink-faint);
   flex-wrap: wrap;
   flex-shrink: 0;
 }

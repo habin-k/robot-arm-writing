@@ -1,7 +1,16 @@
 import { useState, useRef, useEffect } from 'react'
-import { goHome, emergencyStop, errorReset, jog } from '../../api/robot'
+import { goHome, emergencyStop, errorReset, jog, grip, ungrip } from '../../api/robot'
+import { useRobotState } from '../../hooks/useRobotState'
 import styles from './AdminTab.module.css'
 
+const AXIS_LABELS = ['X', 'Y', 'Z', 'RX', 'RY', 'RZ']
+const AXIS_UNITS  = ['mm', 'mm', 'mm', '°', '°', '°']
+// TCP 외력(User_102) 표시: 병진 힘 Fx/Fy/Fz(N)만 노출
+const FORCE_LABELS = ['Fx', 'Fy', 'Fz']
+const FORCE_UNIT   = 'N'
+
+// 조그는 '거리(mm)'가 아니라 '속도(mm/s)'다. 버튼을 누르고 있는 동안 이 속도로
+// 계속 이동하므로, 실제 이동거리 = 속도 × 누르고 있은 시간.
 const SPEEDS = [
   { label: '저속', value: 10 },
   { label: '중속', value: 30 },
@@ -12,6 +21,7 @@ export default function AdminTab({ estopOnly }) {
   const [speed, setSpeed] = useState(30)
   const [feedback, setFeedback] = useState('')
   const activeAxis = useRef(null)
+  const { robot, connected } = useRobotState()
 
   const send = async (fn, msg) => {
     try {
@@ -70,6 +80,14 @@ export default function AdminTab({ estopOnly }) {
             <button className={styles.actionBtn} onClick={() => send(errorReset, '에러 리셋 명령 전송')}>
               ↺ 에러 리셋
             </button>
+            <div className={styles.gripRow}>
+              <button className={styles.actionBtn} onClick={() => send(grip, 'Grip 명령 전송')}>
+                ✊ Grip
+              </button>
+              <button className={styles.actionBtn} onClick={() => send(ungrip, 'Ungrip 명령 전송')}>
+                🖐 Ungrip
+              </button>
+            </div>
             {feedback && <div className={styles.feedback}>{feedback}</div>}
           </div>
 
@@ -81,7 +99,7 @@ export default function AdminTab({ estopOnly }) {
                 <button key={s.value}
                   className={`${styles.stepBtn} ${speed === s.value ? styles.stepBtnActive : ''}`}
                   onClick={() => setSpeed(s.value)}
-                >{s.label}</button>
+                >{s.value} mm/s</button>
               ))}
             </div>
 
@@ -99,6 +117,39 @@ export default function AdminTab({ estopOnly }) {
               <JogBtn axis="z" dir={1} label="Z+" />
               <JogBtn axis="z" dir={-1} label="Z−" />
             </div>
+          </div>
+        </div>
+      )}
+
+      {!estopOnly && (
+        <div className={styles.card}>
+          <div className={styles.cardTitle}>
+            로봇 상태 (User 102 좌표계)
+            <span className={`${styles.wsDot} ${connected ? styles.wsOn : ''}`} />
+          </div>
+          <div className={styles.coordGrid}>
+            {robot.tcp_position.map((v, i) => (
+              <div key={i} className={styles.coordCell}>
+                <span className={styles.coordAxis}>{AXIS_LABELS[i]}</span>
+                <span className={styles.coordVal}>
+                  {connected ? v.toFixed(2) : '—'}
+                  <span className={styles.coordUnit}>{AXIS_UNITS[i]}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className={styles.coordSubTitle}>TCP 외력 (User 102)</div>
+          <div className={styles.coordGrid}>
+            {FORCE_LABELS.map((label, i) => (
+              <div key={label} className={styles.coordCell}>
+                <span className={styles.coordAxis}>{label}</span>
+                <span className={styles.coordVal}>
+                  {connected ? (robot.tcp_force?.[i] ?? 0).toFixed(2) : '—'}
+                  <span className={styles.coordUnit}>{FORCE_UNIT}</span>
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}

@@ -38,14 +38,15 @@ hmi/src/
 │   ├── writing.js           ← 글씨 쓰기 API (preview, execute, cancel, status)
 │   └── robot.js             ← 로그인 + 로봇 제어 API (home, estop, jog 등)
 ├── hooks/
-│   └── useProgress.js       ← WebSocket 진행률 구독 훅 (연결 상태 포함)
+│   ├── useProgress.js       ← WS /ws/progress 진행률 구독 훅 (연결 상태 포함)
+│   └── useRobotState.js     ← WS /ws/robot 구독 훅 (좌표·외력·종이감지, User_102)
 └── components/
     ├── user/
     │   ├── UserTab.jsx       ← 글씨 쓰기 탭 (입력, 폰트, 크기, 미리보기, 실행)
     │   ├── PreviewCanvas.jsx ← 웨이포인트 → Canvas 렌더링 (A4 비율)
-    │   └── StatusTab.jsx     ← 작업 상태 탭 (진행률, 연결 상태)
+    │   └── StatusTab.jsx     ← 작업 상태 탭 (진행률·현재글자·획진행, 실시간)
     └── admin/
-        ├── AdminTab.jsx      ← 로봇 제어 탭 (비상정지, 원점복귀, 조그)
+        ├── AdminTab.jsx      ← 로봇 제어 탭 (비상정지, 원점복귀, 조그, 좌표·외력 모니터)
         └── LoginModal.jsx    ← 관리자 로그인 모달
 ```
 
@@ -102,7 +103,24 @@ const { progress, connected } = useProgress()
 // connected: WebSocket 연결 여부 (StatusTab 연결 상태 표시에 사용)
 ```
 
-연결이 끊기면 2초마다 자동 재연결을 시도합니다.
+- **실시간**: 서버가 상태/획 완료마다 push → StatusTab이 즉시 갱신(새로고침 불필요).
+- `current_char`(현재 글자): 서버가 획 인덱스로 역추적해 채운다(획→글자 매핑).
+- `progress_pct`·`current_stroke`: 획 완료마다 갱신, 완료 시 100%.
+
+### 실시간 로봇 상태 (WebSocket)
+
+`useRobotState()` 훅이 `ws://<서버>/ws/robot`에 연결합니다. (AdminTab 로봇 제어 탭)
+
+```js
+const { robot, connected } = useRobotState()
+// robot: { tcp_position: [x,y,z,rx,ry,rz],   // User_102 좌표 (mm, °)
+//          tcp_force:    [fx,fy,fz,tx,ty,tz], // User_102 외력 (N, Nm) — Fx/Fy/Fz 표시
+//          paper_present: true|false|null }
+```
+
+- 좌표·외력 모두 **User_102 좌표계** 기준이며, **글씨 쓰는 도중에도** 실시간 갱신된다.
+
+두 훅 모두 연결이 끊기면 2초마다 자동 재연결을 시도합니다.
 
 ---
 

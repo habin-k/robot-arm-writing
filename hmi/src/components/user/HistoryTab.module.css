@@ -1,0 +1,128 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.count {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.toolbarBtns { display: flex; gap: 8px; }
+
+.refreshBtn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 7px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.refreshBtn:hover:not(:disabled) { border-color: var(--ink); color: var(--ink); }
+.refreshBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.deleteBtn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 7px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.deleteBtn:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: #fdeceb;
+}
+.deleteBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.checkCol { width: 36px; text-align: center; padding-right: 0 !important; }
+.checkCol input { cursor: pointer; accent-color: var(--ink); }
+.rowChecked td { background: var(--hover); }
+
+.error {
+  font-size: 13px;
+  color: var(--danger);
+  background: #fdeceb;
+  border: 1px solid #f3cfcb;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.empty {
+  font-size: 14px;
+  color: var(--ink-faint);
+  text-align: center;
+  padding: 60px 0;
+  background: var(--paper);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.tableWrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgba(23, 25, 28, 0.04);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--paper-sunk);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.table tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  vertical-align: top;
+}
+
+.table tbody tr:last-child td { border-bottom: none; }
+.table tbody tr:hover { background: var(--hover); }
+
+.time { color: var(--ink-soft); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.nick { font-weight: 600; white-space: nowrap; }
+
+.text {
+  max-width: 320px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ink);
+}

@@ -91,7 +91,7 @@ class PathGenerator:
                  font_name='regular',
                  char_height_mm=15.0,
                  line_spacing_factor=1.6,
-                 char_spacing_mm=0.0,
+                 char_spacing_mm=0.5,
                  paper_width_mm=295.57,
                  paper_height_mm=209.72,
                  margin_mm=20.0,
@@ -216,8 +216,12 @@ class PathGenerator:
         all_y = [p[1] for stroke in strokes for p in stroke]
         y_min, y_max = min(all_y), max(all_y)
 
+        # 뱀(serpentine/boustrophedon)형 채우기: 한 줄은 왼→오, 다음 줄은 오→왼으로
+        # 방향을 번갈아 그린다. 아래에서 위로 일정하게 훑는 대신 지그재그로 왕복해
+        # 사람이 붓으로 음영을 채우는 듯한 자연스러운 궤적이 된다.
         hatch = []
         y = y_min + self.hatch_spacing_mm
+        row = 0
         while y < y_max:
             xs = []
             for (x1, y1), (x2, y2) in segments:
@@ -227,10 +231,15 @@ class PathGenerator:
                     t = (y - y1) / (y2 - y1)
                     xs.append(x1 + t * (x2 - x1))
             xs.sort()
-            for i in range(0, len(xs) - 1, 2):
-                if xs[i + 1] > xs[i]:
-                    hatch.append([(xs[i], y), (xs[i + 1], y)])
+            spans = [(xs[i], xs[i + 1])
+                     for i in range(0, len(xs) - 1, 2) if xs[i + 1] > xs[i]]
+            if row % 2 == 1:
+                # 홀수 줄: 스팬 순서와 각 스팬의 방향을 뒤집어 오른쪽→왼쪽으로 왕복
+                spans = [(b, a) for a, b in reversed(spans)]
+            for a, b in spans:
+                hatch.append([(a, y), (b, y)])
             y += self.hatch_spacing_mm
+            row += 1
         return hatch
 
     def _line_width(self, text):
@@ -273,6 +282,25 @@ class PathGenerator:
             if line:
                 result.append(line)
         return result
+
+    def stroke_char_map(self, text):
+        """generate() 와 '같은 순서'로, 각 획(pen_down 연속 구간)이 속한 글자를
+        리스트로 반환한다. i번째 원소 = (i+1)번째 획의 글자.
+        서버가 획 진행 인덱스로 '현재 글자'를 역추적하는 데 사용한다.
+        (generate 의 글자·획 순회 로직과 반드시 일치시켜야 한다.)"""
+        chars = []
+        for line in self._wrap(text):
+            if not line:
+                continue
+            for ch in line:
+                strokes, _adv = self._glyph_strokes(ch)
+                draw_strokes = (self._hatch_glyph(strokes)
+                                if self.fill_mode == 'hatch' else strokes)
+                for stroke in draw_strokes:
+                    if not stroke:
+                        continue
+                    chars.append(ch)
+        return chars
 
     def generate(self, text, center_h=True, center_v=True):
         """
@@ -321,6 +349,28 @@ class PathGenerator:
                     for sx, sy in stroke:
                         path.append((cur_x + sx, y_offset + sy, PEN_DOWN))
                 cur_x += adv + self.char_spacing_mm
+
+        # 실제 크기(char_height_mm) 유지 + 중앙 정렬.
+        #   → 글씨 크기 슬라이더가 실제 글자 높이(mm)를 그대로 결정한다.
+        #   → 텍스트 블록이 여백 안쪽 영역(용지 - 2*여백)을 '넘칠 때만' 축소해서 담는다.
+        #     (여백은 크기 조절이 아니라 '종이 밖으로 안 나가게 하는 경계'로 작동)
+        if path:
+            xs = [p[0] for p in path]
+            ys = [p[1] for p in path]
+            block_w = max(xs) - min(xs)
+            block_h = max(ys) - min(ys)
+            draw_w = self.paper_width_mm - 2 * self.margin_mm
+            draw_h = self.paper_height_mm - 2 * self.margin_mm
+            if block_w > 1e-6 and block_h > 1e-6 and draw_w > 0 and draw_h > 0:
+                s = 1.0                                   # 기본: 실제 크기 유지
+                if block_w > draw_w or block_h > draw_h:  # 여백 상자를 넘칠 때만 축소
+                    s = min(draw_w / block_w, draw_h / block_h)
+                bx = (min(xs) + max(xs)) / 2.0   # 블록 중심
+                by = (min(ys) + max(ys)) / 2.0
+                px = self.paper_width_mm / 2.0    # 용지 중심
+                py = self.paper_height_mm / 2.0
+                path = [((x - bx) * s + px, (y - by) * s + py, pd)
+                        for x, y, pd in path]
 
         return path
 

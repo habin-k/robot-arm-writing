@@ -31,6 +31,18 @@ def error_reset():
     return {"message": "에러 리셋 명령 전송"}
 
 
+@router.post("/grip", summary="그리퍼 집기")
+def grip():
+    _node().publish_grip(True)
+    return {"message": "그립 명령 전송"}
+
+
+@router.post("/ungrip", summary="그리퍼 놓기")
+def ungrip():
+    _node().publish_grip(False)
+    return {"message": "언그립 명령 전송"}
+
+
 @router.post("/jog", summary="수동 조그 (연속)")
 def jog(req: JogRequest):
     _node().publish_jog(req.axis, req.direction, req.moving, req.speed)

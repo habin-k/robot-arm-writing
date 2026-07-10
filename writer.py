@@ -1,3 +1,25 @@
+"""
+writer.py — 붓펜 힘제어 글씨 쓰기 엔진.
+
+server/pub_sub.py 의 MotionWorker(그리기 로직)를 노드/스레드/큐 의존성 없이
+재사용 가능한 PenWriter 클래스로 분리한 것. 좌표·힘제어 로직은 pub_sub.py 와
+100% 동일하게 유지한다 (동작이 달라지면 안 됨).
+
+두 가지로 쓸 수 있다:
+
+  1) import 해서 task_manager_node.py 등에서 (프로세스 1개, 로봇 단독 소유):
+        from writer import PenWriter
+        writer = PenWriter(node, state, init_robot=False)  # tool/tcp는 호출자가 관리
+        writer.draw(waypoints)          # 알파벳 그리기 (블로킹, 끝나면 리턴)
+
+  2) 단독 실행 테스트 (기존 `python3 pub_sub.py` 와 동일하게):
+        python3 writer.py
+        → /robot/target_moving 구독 → 받으면 그린다. 종이 센서 불필요.
+
+전제: PenWriter() 생성 전에 DR_init.__dsr__node 가 설정돼 있어야 한다
+      (DSR_ROBOT2 import 시점에 읽힘).
+"""
+
 import queue
 import threading
 import time
@@ -49,7 +71,7 @@ WRITE_STIFFNESS  = [3000, 3000, 3000, 200, 200, 200]  # X/Y 강성 높게, Z 낮
 
 # 접촉 감지: 순응+힘제어로 하강 중, Z 외력이 이 값을 넘으면 '바닥 접촉'으로 판단하고
 #            하강 대기를 끝낸다. 접촉 감지 후에는 순응/힘 제어를 끄고 위치제어로 그린다.
-CONTACT_FORCE_N   = 2.3       # N (바닥 접촉 판단 힘)
+CONTACT_FORCE_N   = 2.8       # N (바닥 접촉 판단 힘)
 CONTACT_DEBOUNCE  = 5         # |Fz|가 임계를 '연속 이 횟수'(×0.01s=0.05s) 넘어야 접촉 확정 (노이즈 스파이크 무시)
 
 WRITE_VEL  = [20.0, 20.0]    # 글씨 쓰기 (느림)
@@ -92,91 +114,40 @@ def _user_rotation_from_base(worker, user_id):
         return np.eye(3)
 
 
-class SubscriberNode(Node):
+class PenWriter:
     """
-    구독 전용 노드. 콜백은 명령을 큐에 넣기만 하고 실제 모션은 실행하지 않는다.
-    (DSR 모션 함수는 별도 DSR 노드를 내부적으로 spin하므로, 이 노드와 분리해야
-     한 번만 동작하는 문제가 사라진다.)
+    붓펜 힘제어 글씨 쓰기 엔진. (pub_sub.py MotionWorker 에서 그리기 로직만 분리)
+
+    노드/큐/스레드에 의존하지 않는다:
+      · 발행(status/pose/force/progress)은 생성 시 넘긴 node 에 publisher 를 만들어 처리
+      · 비상정지 등 외부 상태는 공유 dict `state['emergency']` 로만 읽는다
+      · DSR 모션 함수는 __init__ 에서 import (호출 전 DR_init.__dsr__node 필수)
+
+    사용:
+        writer = PenWriter(node, state)   # 발행자·DSR 초기화
+        writer.draw(waypoints)            # 알파벳 그리기 (블로킹)
     """
 
-    def __init__(self, cmd_queue: queue.Queue, state: dict):
-        super().__init__('controller_node', namespace=ROBOT_ID)
-        self.q     = cmd_queue
-        self.state = state
-        self.status_pub = self.create_publisher(String, '/robot/status', 10)
-        # 로봇 현재 좌표(User_102) 발행 → 서버가 구독해 HMI로 전달
-        self.pose_pub = self.create_publisher(Float32MultiArray, '/robot/current_pose', 10)
-        # TCP 외력(User_102) 발행 [fx,fy,fz,tx,ty,tz] → HMI 실시간 힘 표시
-        self.force_pub = self.create_publisher(Float32MultiArray, '/robot/force', 10)
-        # 획 진행 발행 [완료 획 수, 전체 획 수] → 서버가 구독해 HMI 진행바/획 진행에 반영
-        self.progress_pub = self.create_publisher(Float32MultiArray, '/robot/progress', 10)
+    # 실시간 좌표·외력 발행 주기 (초). 쓰는 도중 폴링에서도 이 주기로 throttle.
+    POSE_PUBLISH_INTERVAL = 0.1
 
-        # 비상정지용 move_stop 서비스 클라이언트 (진행 중인 모션을 즉시 중단)
-        self.move_stop_cli = self.create_client(MoveStop, f'/{ROBOT_ID}/motion/move_stop')
-        # 연속 조그용 jog 서비스 클라이언트 (누르면 속도 지정, 떼면 속도 0)
-        self.jog_cli       = self.create_client(Jog, f'/{ROBOT_ID}/motion/jog')
-
-        self.create_subscription(Float32MultiArray, '/robot/target_moving', self._on_moving, 10)
-        self.create_subscription(Bool,              '/safety/emergency_stop', self._on_estop, 10)
-        self.create_subscription(Bool,              '/robot/go_home',         self._on_home, 10)
-        self.create_subscription(Bool,              '/robot/error_reset',     self._on_reset, 10)
-        self.create_subscription(Float32MultiArray, '/robot/jog',             self._on_jog, 10)
-        self.create_subscription(Bool,              '/robot/grip',            self._on_grip, 10)
-
-        self.get_logger().info("통신 노드 준비 완료")
-
-    def _on_moving(self, msg):
-        self.state['emergency'] = False
-        self.q.put(('write', list(msg.data)))
-
-    def _on_estop(self, msg):
-        if msg.data:
-            self.state['emergency'] = True  # 진행 중인 글쓰기 루프 중단용 플래그
-            # 진행 중인 모션을 실제로 즉시 정지 (fire-and-forget, 응답 대기 안 함)
-            req = MoveStop.Request()
-            req.stop_mode = DR_QSTOP
-            self.move_stop_cli.call_async(req)
-            self.status_pub.publish(String(data="ERROR"))
-            self.get_logger().error("비상정지 수신 — 로봇 정지 명령 전송")
-
-    def _on_home(self, msg):
-        if msg.data:
-            self.q.put(('home', None))
-
-    def _on_reset(self, msg):
-        if msg.data:
-            self.q.put(('reset', None))
-
-    def _on_grip(self, msg):
-        # True=그립(집기), False=언그립(놓기) — 큐로 넘겨 메인 스레드에서 실행
-        self.q.put(('grip' if msg.data else 'ungrip', None))
-
-    def _on_jog(self, msg):
+    def __init__(self, node: Node, state: dict, *, init_robot: bool = True):
         """
-        연속 조그: 네이티브 jog 서비스 직접 호출 (큐 거치지 않음).
-        데이터 포맷: [axis_idx(0~5), speed_signed]
-          speed_signed != 0 → 해당 속도로 연속 이동 시작
-          speed_signed == 0 → 정지
+        node       : publisher 를 붙이고 logger 를 쓸 rclpy 노드 (task_manager 노드나 테스트 노드)
+        state      : {'emergency': bool, ...} 공유 딕셔너리 (비상정지 플래그를 읽음)
+        init_robot : True 면 자율모드/Tool/TCP/기준좌표까지 설정한다 (단독 실행용).
+                     task_manager 처럼 호출자가 Tool/TCP 를 이미 관리하면 False 로 넘겨
+                     좌표 기준(set_ref_coord)만 맞추게 한다.
         """
-        if len(msg.data) < 2:
-            return
-        axis_idx = int(msg.data[0])
-        speed    = float(msg.data[1])
-        req = Jog.Request()
-        req.jog_axis       = JOG_AXIS_TASK_X + axis_idx
-        req.move_reference = DR_BASE_REF
-        req.speed          = speed
-        self.jog_cli.call_async(req)  # fire-and-forget
-
-
-class MotionWorker:
-    """메인 스레드에서 큐를 소비하며 DSR 모션을 실행한다."""
-
-    def __init__(self, sub_node: SubscriberNode, cmd_queue: queue.Queue, state: dict):
-        self.sub   = sub_node
-        self.q     = cmd_queue
+        self.node  = node
         self.state = state
-        self.log   = sub_node.get_logger()
+        self.log   = node.get_logger()
+
+        # ── 발행자 (pub_sub 의 SubscriberNode 가 갖던 것을 여기서 소유) ──────
+        self.status_pub   = node.create_publisher(String,             '/robot/status', 10)
+        self.pose_pub     = node.create_publisher(Float32MultiArray,  '/robot/current_pose', 10)
+        self.force_pub    = node.create_publisher(Float32MultiArray,  '/robot/force', 10)
+        self.progress_pub = node.create_publisher(Float32MultiArray,  '/robot/progress', 10)
 
         from DSR_ROBOT2 import (
             movel, movej, movesx, amovel, amovesx, check_motion,
@@ -198,9 +169,9 @@ class MotionWorker:
         self.check_motion = check_motion  # 0=모션 없음(완료), !=0=이동 중
         self.posx   = posx
         self.posj   = posj
-        self.get_current_posx   = get_current_posx
+        self.get_current_posx    = get_current_posx
         self.get_user_cart_coord = get_user_cart_coord
-        self.set_digital_output = set_digital_output
+        self.set_digital_output  = set_digital_output
 
         # 힘/순응 제어 함수
         self.task_compliance_ctrl    = task_compliance_ctrl
@@ -215,19 +186,96 @@ class MotionWorker:
         self.DR_AXIS_Z               = DR_AXIS_Z
         self.DR_BASE                 = DR_BASE
 
-        set_robot_mode(ROBOT_MODE_AUTONOMOUS)
-        # 힘 제어가 올바른 붓 끝 기준으로 동작하도록 Tool/TCP 지정 (test1.py 와 동일)
-        set_tool("Tool Weight")
-        set_tcp("GripperDA_v1")
-        # 웨이포인트 좌표가 사용자 좌표계(id 102) 기준 → 전역 기본 좌표를 이 좌표계로 설정.
-        # 이후 movel/movesx/get_current_posx 가 모두 User_102 프레임으로 동작.
-        set_ref_coord(USER_COORD_ID)
-        self.log.info(f"DSR API 초기화 완료 (자율 모드, 힘 제어, 기준 좌표=User {USER_COORD_ID})")
+        self.set_ref_coord = set_ref_coord
+
+        if init_robot:
+            set_robot_mode(ROBOT_MODE_AUTONOMOUS)
+            # 힘 제어가 올바른 붓 끝 기준으로 동작하도록 Tool/TCP 지정 (pub_sub.py 와 동일)
+            set_tool("Tool Weight")
+            set_tcp("GripperDA_v1")
+            # 단독 실행: 전역 기준 좌표를 그리기용 User_102 로 고정
+            set_ref_coord(USER_COORD_ID)
+            self.log.info(f"DSR 자율 모드/Tool/TCP/기준좌표(User {USER_COORD_ID}) 설정 완료")
+        # ★ task_manager 통합(init_robot=False) 시에는 여기서 전역 좌표계를 바꾸지 않는다.
+        #   draw() 안에서 그릴 때만 User_102 로 바꾸고, 끝나면 BASE 로 복원한다.
+        #   (task_manager 의 집기/도장 좌표는 BASE 기준이라, 전역으로 102 를 걸면 깨짐)
 
         # get_tool_force 는 BASE/TOOL/WORLD 만 지원하므로, User_102 외력을 얻으려면
         # BASE 외력을 직접 회전 변환해야 한다. User_102 정의를 1회 조회해 회전행렬을 캐시한다.
         #   v_user = R_base_from_user^T · v_base
         self._R_bu = _user_rotation_from_base(self, USER_COORD_ID)
+
+        self._last_pose_t = 0.0
+        self._contact_z   = None
+
+    # ── 발행 헬퍼 ──────────────────────────────────────────────────────────
+
+    def publish_status(self, s):
+        self.status_pub.publish(String(data=s))
+
+    # 하위호환 별칭 (pub_sub 내부명)
+    _status = publish_status
+
+    def _progress(self, done, total):
+        """획 진행 발행 [완료 획 수, 전체 획 수]."""
+        msg = Float32MultiArray()
+        msg.data = [float(done), float(total)]
+        self.progress_pub.publish(msg)
+
+    def _log_zf(self, tag):
+        """디버깅용: 현재 z(User_102, mm)와 Z축 외력 Fz(N)를 터미널에 출력."""
+        try:
+            z  = self.get_current_posx()[0][2]
+            fz = self.get_tool_force(ref=self.DR_BASE)[2]
+            self.log.info(f"  [{tag}]  z = {z:7.2f} mm   Fz = {fz:+6.2f} N")
+        except Exception as e:
+            self.log.warning(f"  [{tag}] z/Fz 읽기 실패: {e}")
+
+    def _force_user102(self):
+        """현재 TCP 외력을 User_102 기준 [fx,fy,fz,tx,ty,tz] 로 반환.
+        get_tool_force 는 BASE 만 지원하므로 BASE 외력을 회전행렬로 User_102 로 변환한다."""
+        f = self.get_tool_force(ref=self.DR_BASE)
+        if not isinstance(f, (list, tuple)) or len(f) < 6:
+            return None
+        fb = np.array(f[:3], dtype=float)   # 병진 힘 (BASE)
+        tb = np.array(f[3:6], dtype=float)  # 토크 (BASE)
+        fu = self._R_bu @ fb
+        tu = self._R_bu @ tb
+        return [float(v) for v in (*fu, *tu)]
+
+    def publish_live(self, force=True):
+        """현재 TCP 좌표·외력(User_102 기준)을 /robot/current_pose·/robot/force 로 발행.
+        throttle O — 유휴/조그뿐 아니라 쓰는 도중(async 모션 폴링)에도 호출되어 실시간 갱신된다."""
+        now = time.time()
+        if now - self._last_pose_t < self.POSE_PUBLISH_INTERVAL:
+            return
+        self._last_pose_t = now
+
+        # 현재 좌표 (User_102) — get_current_posx 는 User 좌표를 직접 지원
+        try:
+            res = self.get_current_posx(ref=USER_COORD_ID)
+            if res is not None and res[0] is not None:
+                msg = Float32MultiArray()
+                msg.data = [float(v) for v in res[0][:6]]
+                self.pose_pub.publish(msg)
+        except Exception as e:
+            self.log.warning(f"좌표 발행 실패: {e}")
+
+        # 현재 TCP 외력 (User_102) [fx,fy,fz,tx,ty,tz]
+        if force:
+            try:
+                fu = self._force_user102()
+                if fu is not None:
+                    fmsg = Float32MultiArray()
+                    fmsg.data = fu
+                    self.force_pub.publish(fmsg)
+            except Exception as e:
+                self.log.warning(f"외력 발행 실패: {e}")
+
+    # 하위호환 별칭 (pub_sub 내부명)
+    _publish_live = publish_live
+
+    # ── 힘/순응 제어 ────────────────────────────────────────────────────────
 
     def _enable_write_force(self):
         """순응 제어 + 목표 힘(-3N) ON — 붓을 종이에 일정 힘으로 누른다."""
@@ -242,86 +290,6 @@ class MotionWorker:
         self.wait(0.1)
         self.release_compliance_ctrl()
 
-    def _status(self, s):
-        self.sub.status_pub.publish(String(data=s))
-
-    def _progress(self, done, total):
-        """획 진행 발행 [완료 획 수, 전체 획 수]."""
-        msg = Float32MultiArray()
-        msg.data = [float(done), float(total)]
-        self.sub.progress_pub.publish(msg)
-
-    def _log_zf(self, tag):
-        """디버깅용: 현재 z(User_102, mm)와 Z축 외력 Fz(N)를 터미널에 출력."""
-        try:
-            z  = self.get_current_posx()[0][2]
-            fz = self.get_tool_force(ref=self.DR_BASE)[2]
-            self.log.info(f"  [{tag}]  z = {z:7.2f} mm   Fz = {fz:+6.2f} N")
-        except Exception as e:
-            self.log.warning(f"  [{tag}] z/Fz 읽기 실패: {e}")
-
-    # 실시간 좌표·외력 발행 주기 (초). 쓰는 도중 폴링에서도 이 주기로 throttle.
-    POSE_PUBLISH_INTERVAL = 0.1
-
-    def run(self):
-        self._last_pose_t = 0.0
-        while rclpy.ok():
-            if self.q.empty():
-                # 유휴 시간에 현재 좌표·외력(User_102)을 주기적으로 발행 (조그 중에도 갱신됨)
-                self._publish_live()
-                time.sleep(0.05)
-                continue
-
-            cmd, data = self.q.get()
-            self.state['busy'] = True
-            if   cmd == 'write':  self._do_write(data)
-            elif cmd == 'home':   self._do_home()
-            elif cmd == 'reset':  self._do_reset()
-            elif cmd == 'grip':   self._do_grip()
-            elif cmd == 'ungrip': self._do_ungrip()
-            self.state['busy'] = False
-
-    def _force_user102(self):
-        """현재 TCP 외력을 User_102 기준 [fx,fy,fz,tx,ty,tz] 로 반환.
-        get_tool_force 는 BASE 만 지원하므로 BASE 외력을 회전행렬로 User_102 로 변환한다."""
-        f = self.get_tool_force(ref=self.DR_BASE)
-        if not isinstance(f, (list, tuple)) or len(f) < 6:
-            return None
-        fb = np.array(f[:3], dtype=float)   # 병진 힘 (BASE)
-        tb = np.array(f[3:6], dtype=float)  # 토크 (BASE)
-        fu = self._R_bu @ fb
-        tu = self._R_bu @ tb
-        return [float(v) for v in (*fu, *tu)]
-
-    def _publish_live(self, force=True):
-        """현재 TCP 좌표·외력(User_102 기준)을 /robot/current_pose·/robot/force 로 발행.
-        throttle O — 유휴/조그뿐 아니라 쓰는 도중(async 모션 폴링)에도 호출되어 실시간 갱신된다."""
-        now = time.time()
-        if now - self._last_pose_t < self.POSE_PUBLISH_INTERVAL:
-            return
-        self._last_pose_t = now
-
-        # 현재 좌표 (User_102) — get_current_posx 는 User 좌표를 직접 지원
-        try:
-            res = self.get_current_posx(ref=USER_COORD_ID)
-            if res is not None and res[0] is not None:
-                msg = Float32MultiArray()
-                msg.data = [float(v) for v in res[0][:6]]
-                self.sub.pose_pub.publish(msg)
-        except Exception as e:
-            self.log.warning(f"좌표 발행 실패: {e}")
-
-        # 현재 TCP 외력 (User_102) [fx,fy,fz,tx,ty,tz]
-        if force:
-            try:
-                fu = self._force_user102()
-                if fu is not None:
-                    fmsg = Float32MultiArray()
-                    fmsg.data = fu
-                    self.sub.force_pub.publish(fmsg)
-            except Exception as e:
-                self.log.warning(f"외력 발행 실패: {e}")
-
     def _wait_motion_done(self, poll=0.03):
         """async 모션(amovel/amovesx)이 끝날 때까지 폴링하며 좌표·외력을 실시간 발행한다.
         비상정지가 걸리면 즉시 반환한다. (단일 스레드 폴링 — DSR 노드 spin 충돌 없음)"""
@@ -334,10 +302,8 @@ class MotionWorker:
                     break
             except Exception:
                 break
-            self._publish_live()
+            self.publish_live()
             self.wait(poll)
-
-    # ── 개별 동작 ──────────────────────────────────────────────────────────
 
     def _wait_for_contact(self):
         """
@@ -346,8 +312,6 @@ class MotionWorker:
         ★ 노이즈 스파이크 오감지 방지(디바운스):
           |Fz| 가 CONTACT_FORCE_N 을 '연속 CONTACT_DEBOUNCE 회' 넘을 때만 접촉으로 확정한다.
           한두 샘플만 튀는 노이즈는 카운터가 리셋되어 무시된다.
-        ★ 판정과 로그가 같은 값(get_tool_force[2])을 쓰므로 로그 = 실제 판정 근거.
-          하강 중 매 반복(100Hz)마다 Fz·z·연속카운트를 출력한다.
         접촉 확정 시점의 z(mm)를 반환한다.
         """
         hits = 0
@@ -371,43 +335,11 @@ class MotionWorker:
                 contact_z = pz
                 self.log.info(f"바닥 접촉 확정 — z = {contact_z:.2f} mm,  Fz = {fz:+.2f} N")
                 break
-            self._publish_live()   # 접촉 감지 하강 중에도 좌표·외력 실시간 발행
+            self.publish_live()   # 접촉 감지 하강 중에도 좌표·외력 실시간 발행
             self.wait(0.01)
         return contact_z
 
-    def _do_write(self, data):
-        """
-        웨이포인트를 힘 제어로 실행한다.  홈 복귀 → 획들 실행 → 홈 복귀.
-        각 획은 _draw_stroke() 가 처리한다 (1~7단계).
-        """
-        self.log.info("글쓰기 시작")
-        self._status("WRITING")
-
-        strokes = self._split_strokes(data)   # pen_down 연속 구간을 획으로 묶음
-        if not strokes:
-            self._status("IDLE")
-            self.log.warning("웨이포인트가 비어 있음")
-            return
-
-        total = len(strokes)
-        self._progress(0, total)               # 시작 시 전체 획 수 알림 (진행바 0%)
-
-        self._contact_z = None                 # 새 작업마다 접촉 z 재감지 (종이가 바뀌었을 수 있음)
-        self._go_home()                        # 시작 전 홈 복귀
-
-        for n, stroke in enumerate(strokes, 1):
-            if self.state.get('emergency'):
-                self.log.warning("비상정지로 글쓰기 중단")
-                self._status("ERROR")
-                return
-            self._draw_stroke(stroke)
-            self._publish_live()
-            self._progress(n, total)           # 획 완료마다 진행 갱신
-            self.log.info(f"  획 {n}/{total} 완료")
-
-        self._go_home()                        # 끝난 뒤 홈 복귀
-        self._status("IDLE")
-        self.log.info("글쓰기 완료")
+    # ── 그리기 ──────────────────────────────────────────────────────────────
 
     @staticmethod
     def _split_strokes(data):
@@ -486,8 +418,57 @@ class MotionWorker:
         self.movel(self.posx(lx, ly, contact_z + HOVER_HEIGHT, lrx, lry, lrz),
                    vel=TRAVEL_VEL, acc=TRAVEL_ACC)
 
+    def draw(self, waypoints):
+        """
+        웨이포인트(flat 7값×N)를 힘 제어로 실행한다.  홈 복귀 → 획들 실행 → 홈 복귀.
+
+        블로킹 — 다 그리면 리턴한다. 비상정지(state['emergency'])가 걸리면 중단하고
+        ERROR 상태를 발행한 뒤 리턴한다.
+        task_manager 의 write() 에서 이 메서드를 호출한다.
+        """
+        strokes = self._split_strokes(waypoints)   # pen_down 연속 구간을 획으로 묶음
+        if not strokes:
+            self.publish_status("IDLE")
+            self.log.warning("웨이포인트가 비어 있음")
+            return
+
+        self.log.info("글쓰기 시작")
+        self.publish_status("WRITING")
+
+        # ★ 그리는 구간에서만 전역 기준 좌표를 User_102 로 바꾸고, 끝나면(예외 포함)
+        #   반드시 BASE 로 복원한다. task_manager 의 집기 좌표(BASE)가 깨지지 않게.
+        self.set_ref_coord(USER_COORD_ID)
+        try:
+            self._draw_strokes(strokes)
+        finally:
+            self.set_ref_coord(self.DR_BASE)
+
+    def _draw_strokes(self, strokes):
+        """draw() 의 실제 획 실행 루프 (전역 기준 좌표=User_102 인 상태에서 호출)."""
+        total = len(strokes)
+        self._progress(0, total)               # 시작 시 전체 획 수 알림 (진행바 0%)
+
+        self._contact_z = None                 # 새 작업마다 접촉 z 재감지 (종이가 바뀌었을 수 있음)
+        self._go_home()                        # 시작 전 홈 복귀
+
+        for n, stroke in enumerate(strokes, 1):
+            if self.state.get('emergency'):
+                self.log.warning("비상정지로 글쓰기 중단")
+                self.publish_status("ERROR")
+                return
+            self._draw_stroke(stroke)
+            self.publish_live()
+            self._progress(n, total)           # 획 완료마다 진행 갱신
+            self.log.info(f"  획 {n}/{total} 완료")
+
+        self._go_home()                        # 끝난 뒤 홈 복귀
+        self.publish_status("IDLE")
+        self.log.info("글쓰기 완료")
+
+    # ── 이동/유틸 ────────────────────────────────────────────────────────────
+
     def _go_home(self):
-        """현재 위치에서 안전 높이로 수직 상승한 뒤 홈 관절 자세로 이동한다. (test1.go_home)"""
+        """현재 위치에서 안전 높이로 수직 상승한 뒤 홈 관절 자세로 이동한다."""
         self.log.info("홈 위치로 이동")
         res = self.get_current_posx()
         if res is not None and res[0] is not None:
@@ -497,25 +478,18 @@ class MotionWorker:
                        vel=TRAVEL_VEL, acc=TRAVEL_ACC)
         self.movej(self.posj(*HOME_JOINT), vel=10, acc=10)
         self.wait(0.3)
-        self._publish_live()   # 홈 복귀 후 좌표 갱신
+        self.publish_live()   # 홈 복귀 후 좌표 갱신
 
-    def _do_home(self):
+    def home(self):
+        """공개 홈 복귀 (HOMING → IDLE 상태 발행)."""
         self.log.info("원점 복귀")
-        self._status("HOMING")
+        self.publish_status("HOMING")
         self._go_home()
-        self._status("IDLE")
+        self.publish_status("IDLE")
         self.log.info("원점 복귀 완료")
 
-    def _do_reset(self):
-        self.log.info("에러 리셋")
-        from DSR_ROBOT2 import set_robot_mode
-        from DRFC import ROBOT_MODE_AUTONOMOUS
-        set_robot_mode(ROBOT_MODE_AUTONOMOUS)
-        self.state['emergency'] = False
-        self._status("IDLE")
-
     def _do_grip(self):
-        """그리퍼 집기 (digital output 1). writing_node.py grip() 과 동일."""
+        """그리퍼 집기 (digital output 1)."""
         self.log.info("그립")
         self.set_digital_output(1, 0)
         self.set_digital_output(2, 0)
@@ -523,39 +497,130 @@ class MotionWorker:
         self.wait(1)
 
     def _do_ungrip(self):
-        """그리퍼 놓기 (digital output 2). writing_node.py ungrip() 과 동일."""
+        """그리퍼 놓기 (digital output 2)."""
         self.log.info("언그립")
         self.set_digital_output(1, 0)
         self.set_digital_output(2, 0)
         self.set_digital_output(2, 1)
         self.wait(1)
 
+    # ── 단독 실행용 큐 소비 루프 (pub_sub.MotionWorker.run 과 동일) ──────────
+
+    def run(self, cmd_queue: queue.Queue):
+        """메인 스레드에서 큐를 소비하며 모션을 실행한다. (단독 실행 테스트용)
+        task_manager 통합 시에는 이 루프 대신 draw()/home() 을 직접 호출한다."""
+        while rclpy.ok():
+            if cmd_queue.empty():
+                self.publish_live()
+                time.sleep(0.05)
+                continue
+
+            cmd, data = cmd_queue.get()
+            self.state['busy'] = True
+            if   cmd == 'write':  self.draw(data)
+            elif cmd == 'home':   self.home()
+            elif cmd == 'reset':  self._do_reset()
+            elif cmd == 'grip':   self._do_grip()
+            elif cmd == 'ungrip': self._do_ungrip()
+            self.state['busy'] = False
+
+    def _do_reset(self):
+        self.log.info("에러 리셋")
+        from DSR_ROBOT2 import set_robot_mode
+        from DRFC import ROBOT_MODE_AUTONOMOUS
+        set_robot_mode(ROBOT_MODE_AUTONOMOUS)
+        self.state['emergency'] = False
+        self.publish_status("IDLE")
+
+
+class _CommandNode(Node):
+    """
+    단독 실행 테스트용 명령 구독 노드. (pub_sub.SubscriberNode 축소판)
+    콜백은 명령을 큐에 넣기만 하고 실제 모션은 실행하지 않는다.
+    발행자(status/pose/force/progress)는 PenWriter 가 소유하므로 여기엔 없다.
+    """
+
+    def __init__(self, cmd_queue: queue.Queue, state: dict):
+        super().__init__('controller_node', namespace=ROBOT_ID)
+        self.q      = cmd_queue
+        self.state  = state
+        self.writer = None   # main() 에서 PenWriter 생성 후 주입 (estop 상태 발행용)
+
+        # 비상정지용 move_stop 서비스 클라이언트 (진행 중인 모션을 즉시 중단)
+        self.move_stop_cli = self.create_client(MoveStop, f'/{ROBOT_ID}/motion/move_stop')
+        # 연속 조그용 jog 서비스 클라이언트 (누르면 속도 지정, 떼면 속도 0)
+        self.jog_cli       = self.create_client(Jog, f'/{ROBOT_ID}/motion/jog')
+
+        self.create_subscription(Float32MultiArray, '/robot/target_moving', self._on_moving, 10)
+        self.create_subscription(Bool,              '/safety/emergency_stop', self._on_estop, 10)
+        self.create_subscription(Bool,              '/robot/go_home',         self._on_home, 10)
+        self.create_subscription(Bool,              '/robot/error_reset',     self._on_reset, 10)
+        self.create_subscription(Float32MultiArray, '/robot/jog',             self._on_jog, 10)
+        self.create_subscription(Bool,              '/robot/grip',            self._on_grip, 10)
+
+        self.get_logger().info("통신 노드 준비 완료 (writer 단독 실행)")
+
+    def _on_moving(self, msg):
+        self.state['emergency'] = False
+        self.q.put(('write', list(msg.data)))
+
+    def _on_estop(self, msg):
+        if msg.data:
+            self.state['emergency'] = True  # 진행 중인 글쓰기 루프 중단용 플래그
+            req = MoveStop.Request()
+            req.stop_mode = DR_QSTOP
+            self.move_stop_cli.call_async(req)  # fire-and-forget
+            if self.writer is not None:
+                self.writer.publish_status("ERROR")
+            self.get_logger().error("비상정지 수신 — 로봇 정지 명령 전송")
+
+    def _on_home(self, msg):
+        if msg.data:
+            self.q.put(('home', None))
+
+    def _on_reset(self, msg):
+        if msg.data:
+            self.q.put(('reset', None))
+
+    def _on_grip(self, msg):
+        self.q.put(('grip' if msg.data else 'ungrip', None))
+
+    def _on_jog(self, msg):
+        if len(msg.data) < 2:
+            return
+        axis_idx = int(msg.data[0])
+        speed    = float(msg.data[1])
+        req = Jog.Request()
+        req.jog_axis       = JOG_AXIS_TASK_X + axis_idx
+        req.move_reference = DR_BASE_REF
+        req.speed          = speed
+        self.jog_cli.call_async(req)  # fire-and-forget
+
 
 def main(args=None):
+    """단독 실행 진입점 — `python3 writer.py` 로 기존 pub_sub.py 처럼 그리기 테스트."""
     rclpy.init(args=args)
 
     cmd_queue = queue.Queue()
     state = {'emergency': False, 'busy': False}
 
-    # 1) DSR 전용 노드 — DSR 함수가 내부적으로만 spin. 우리가 spin하지 않는다.
+    # 1) DSR 전용 노드 — DSR 함수가 내부적으로만 spin. 우리가 spin 하지 않는다.
     dsr_node = rclpy.create_node('dsr_motion', namespace=ROBOT_ID)
     DR_init.__dsr__id    = ROBOT_ID
     DR_init.__dsr__model = ROBOT_MODEL
     DR_init.__dsr__node  = dsr_node
 
-    # 2) 구독 노드 — 전용 executor로 백그라운드 스레드에서 spin
-    #    (rclpy.spin/spin_until_future_complete는 전역 executor를 공유하므로,
-    #     DSR 함수의 내부 spin과 충돌하지 않도록 별도 executor 사용)
-    sub_node = SubscriberNode(cmd_queue, state)
+    # 2) 명령 구독 노드 — 전용 executor 로 백그라운드 스레드에서 spin
+    sub_node = _CommandNode(cmd_queue, state)
     sub_exec = SingleThreadedExecutor()
     sub_exec.add_node(sub_node)
-
     spin_thread = threading.Thread(target=sub_exec.spin, daemon=True)
     spin_thread.start()
 
-    # 3) 메인 스레드에서 모션 워커 실행 (DSR 함수 여기서만 호출)
-    worker = MotionWorker(sub_node, cmd_queue, state)
-    worker.run()
+    # 3) 메인 스레드에서 그리기 엔진 실행 (DSR 함수 여기서만 호출)
+    writer = PenWriter(sub_node, state, init_robot=True)  # 발행자는 sub_node 에 붙는다
+    sub_node.writer = writer                              # estop 시 상태 발행용
+    writer.run(cmd_queue)
 
     sub_node.destroy_node()
     dsr_node.destroy_node()
