@@ -21,8 +21,18 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            # 단독 실행형 로봇 직접 제어 노드 (현재 server/pub_sub 파이프라인에선 미사용)
-            'writing_node = cobot_writing.writing_node:main',
+            # 아두이노 종이 감지 센서 → 'paper_sensor'(Bool, True=종이 있음) 발행.
+            # 서버 ros_node.py 가 구독해 /ws/robot 으로 HMI 에 전달한다.
+            'paper_sensor_publisher = cobot_writing.paper_sensor_publisher:main',
+            # 작업 매니저: 펜 파지→글쓰기→도장→종이 배출 시퀀스 (writer/paper_ejector 사용).
+            #   ros2 run cobot_writing task_manager --ros-args -p check_grip:=false
+            'task_manager = cobot_writing.task_manager_node:main',
+            # 위 task_manager 에 펜/도장 파지 실패 시 재파지(grip_with_retry) 추가한 테스트본.
+            #   ros2 run cobot_writing task_manager_test --ros-args -p check_grip:=false
+            'task_manager_test = cobot_writing.task_manager_node_test:main',
+            # 아래 둘은 단독 모션 테스트용 (task_manager 가 클래스로도 사용).
+            'writer = cobot_writing.writer:main',
+            'paper_ejector = cobot_writing.paper_ejector_node:main',
         ],
     },
 )
