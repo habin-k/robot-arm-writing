@@ -20,7 +20,7 @@ from cobot_writing.paper_ejector_node import PaperEjector
 DR_init.__dsr__id = "dsr01"
 DR_init.__dsr__model = "m0609"
 
-VEL, ACC = 50, 50
+VEL, ACC = 80, 80
 ROBOT_MODE_MANUAL = 0
 ROBOT_MODE_AUTONOMOUS = 1
 
@@ -308,7 +308,7 @@ class TaskManager:
         time.sleep(duration_sec)
 
     # 그리퍼 명령 이후 최신 width 메시지가 올 때까지 기다린다 (백그라운드 spin 이 seq 를 갱신).
-    def wait_for_gripper_update(self, previous_seq, timeout_sec=2.0, settle_sec=0.2):
+    def wait_for_gripper_update(self, previous_seq, timeout_sec=10.0, settle_sec=0.2):
         deadline = time.monotonic() + timeout_sec
         while rclpy.ok() and time.monotonic() < deadline:
             if self.node.gripper_width_seq > previous_seq:
@@ -322,12 +322,11 @@ class TaskManager:
         p = PENS.get(pen, PENS[DEFAULT_PEN])
         x, y = p['x'], p['y']
         self.node.get_logger().info(f"펜 파지 ({pen}) x={x} y={y}")
-        # self.movej(self.posj(0, 0, 90, 0, 90, 0), vel=30, acc=30)
-        self.movel(self.posx(x, y, 197, 90, 180, 0), vel=VEL, acc=ACC)
-        self.movel(self.posx(x, y, 108.5, 90, 180, 0), vel=VEL, acc=ACC)  #mod=self.DR_MV_MOD_REL, ref=self.DR_BASE
+        self.movel(self.posx(x, y, 197, 90, 180, 90), vel=VEL, acc=ACC)
+        self.movel(self.posx(x, y, 108.5, 90, 180, 90), vel=VEL, acc=ACC)
         self.grip()
         self.wait(0.5)
-        self.movel(self.posx(0, 0, 80, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
+        self.movel(self.posx(x, y, 197, 90, 180, 0), vel=VEL, acc=ACC)
         return True
 
     def write(self):
@@ -343,35 +342,35 @@ class TaskManager:
         p = PENS.get(pen, PENS[DEFAULT_PEN])
         x, y = p['x'], p['y']
         self.node.get_logger().info(f"펜 복귀 ({pen})")
-        self.movel(self.posx(0, 0, 80, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
-        self.movel(self.posx(x, y, 197, 90, 180, 0), vel=VEL, acc=ACC)
-        self.movel(self.posx(x, y, 108.5, 90, 180, 0), vel=VEL, acc=ACC)
+        self.movel(self.posx(0, 0, 20, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
+        self.movel(self.posx(x, y, 197, 90, 180, 90), vel=VEL, acc=ACC)
+        self.movel(self.posx(x, y, 108.5, 90, 180, 90), vel=VEL, acc=ACC)
         self.wait(0.5)
         self.ungrip()
         return True
 
     def grip_stamp(self):
         self.node.get_logger().info("도장 파지")
-        self.movel(self.posx(0, 0, 80, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
-        self.movel(self.posx(242, 72, 150, 90, 180, 0), vel=VEL, acc=ACC)
-        self.movel(self.posx(242, 72, 33.02, 90, 180, 0), vel=VEL, acc=ACC)
+        self.movel(self.posx(0, 0, 90, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
+        self.movel(self.posx(242, 72, 197, 90, 180, 90), vel=VEL, acc=ACC)
+        self.movel(self.posx(242, 72, 33.02, 90, 180, 90), vel=VEL, acc=ACC)
         self.wait(0.5)
         self.grip()
         return True
 
     def stamp(self):
         self.node.get_logger().info("도장 찍기")
-        self.movel(self.posx(0, 0, 100, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
-        self.movel(self.posx(527, 99, 130, 90, 180, 0), vel=VEL, acc=ACC)
-        self.movel(self.posx(527, 99, 78, 90, 180, 0), vel=VEL, acc=ACC)
-        self.movel(self.posx(527, 99, 100, 90, 180, 0), vel=VEL, acc=ACC)
+        self.movel(self.posx(0, 0, 120, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
+        self.movel(self.posx(527, 99, 150, 90, 180, 90), vel=VEL, acc=ACC)
+        self.movel(self.posx(527, 99, 78, 90, 180, 90), vel=VEL, acc=ACC)
+        self.movel(self.posx(527, 99, 150, 90, 180, 90), vel=VEL, acc=ACC)
         return True
 
     def return_stamp(self):
         self.node.get_logger().info("도장 복귀")
-        self.movel(self.posx(527, 99, 130, 90, 180, 0), vel=VEL, acc=ACC)
-        self.movel(self.posx(242, 72, 130, 90, 180, 0), vel=VEL, acc=ACC)
-        self.movel(self.posx(242, 72, 28, 90, 180, 0), vel=VEL, acc=ACC)
+        self.movel(self.posx(527, 99, 150, 90, 180, 90), vel=VEL, acc=ACC)
+        self.movel(self.posx(242, 72, 150, 90, 180, 90), vel=VEL, acc=ACC)
+        self.movel(self.posx(242, 72, 28, 90, 180, 90), vel=VEL, acc=ACC)
         self.wait(0.5)
         self.ungrip()
         return True
@@ -425,15 +424,15 @@ class TaskManager:
         fctrl_dir = [0, 0, 1, 0, 0, 0]
 
         self.node.get_logger().info("종이 배출 테스트 시작")
-        self.movel(self.posx(0, 0, 100, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
-        self.movel(self.posx(462, 80, 100, 90, 180, 90), vel=VEL, acc=ACC)
+        self.movel(self.posx(0, 0, 120, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
+        self.movel(self.posx(462, 80, 120, 90, 180, 90), vel=VEL, acc=ACC)
         self.movel(self.posx(462, 80, 63, 90, 180, 90), vel=VEL, acc=ACC)     # ㅋ좌표 계속 변하는 문제점
         self.wait(0.5)
         self.task_compliance_ctrl([2000, 2000, 2000, 200, 200, 200])
         self.wait(1)
         self.set_desired_force(fd, fctrl_dir, mod=self.DR_FC_MOD_REL)
         self.wait(4)
-        self.movel(self.posx(0, -80, 0, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
+        self.movel(self.posx(0, -65, 0, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
         self.wait(0.5)
         self.release_force()
         self.wait(0.5)

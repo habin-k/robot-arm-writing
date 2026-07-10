@@ -25,6 +25,10 @@ FONT_PATHS = {
     'condensed':    '/usr/share/fonts/truetype/Helvetica Condensed.ttf',
     'extended':     '/usr/share/fonts/truetype/Helvetica Extended.ttf',
     'brother':      '/usr/share/fonts/truetype/Brother Signature.otf',
+    'sansbold':     '/usr/share/fonts/truetype/GmarketSansBold.otf',
+    'sanslight':   '/usr/share/fonts/truetype/GmarketSansLight.otf',
+    'sansmedium':   '/usr/share/fonts/truetype/GmarketSansMedium.otf',
+    'griun_cherri': '/usr/share/fonts/truetype/Griun_Cherry1Spoon-Rg.ttf'
 }
 
 _CURVE_STEPS = 12
@@ -91,7 +95,7 @@ class PathGenerator:
                  font_name='regular',
                  char_height_mm=15.0,
                  line_spacing_factor=1.6,
-                 char_spacing_mm=0.5,
+                 char_spacing_mm=20,
                  paper_width_mm=295.57,
                  paper_height_mm=209.72,
                  margin_mm=20.0,

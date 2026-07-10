@@ -74,7 +74,7 @@ WRITE_STIFFNESS  = [3000, 3000, 3000, 200, 200, 200]  # X/Y 강성 높게, Z 낮
 CONTACT_FORCE_N   = 2.4       # N (바닥 접촉 판단 힘)   1. 두꺼운 펜에서의 값 : 2.4 얇은 펜에서의 값 : 1.8
 CONTACT_DEBOUNCE  = 5         # |Fz|가 임계를 '연속 이 횟수'(×0.01s=0.05s) 넘어야 접촉 확정 (노이즈 스파이크 무시)
 
-WRITE_VEL  = [90.0, 90.0]    # 글씨 쓰기 (품질 별로면 40 정도로 낮출 것)
+WRITE_VEL  = [90.0,  90.0]    # 글씨 쓰기 (품질 별로면 40 정도로 낮출 것)
 WRITE_ACC  = [180.0, 180.0]
 TRAVEL_VEL = [160.0, 120.0]    # 공이동 (빠름)
 TRAVEL_ACC = [200.0, 160.0]
@@ -464,7 +464,7 @@ class PenWriter:
         self._progress(0, total)               # 시작 시 전체 획 수 알림 (진행바 0%)
 
         self._contact_z = None                 # 새 작업마다 접촉 z 재감지 (종이가 바뀌었을 수 있음)
-        self._go_home()                        # 시작 전 홈 복귀
+        # self._go_home()                        # 시작 전 홈 복귀
 
         for n, stroke in enumerate(strokes, 1):
             if self.state.get('emergency'):
@@ -476,7 +476,7 @@ class PenWriter:
             self._progress(n, total)           # 획 완료마다 진행 갱신
             self.log.info(f"  획 {n}/{total} 완료")
 
-        self._go_home()                        # 끝난 뒤 홈 복귀
+        # self._go_home()                      # 끝난 뒤 홈 복귀
         self.publish_status("IDLE")
         self.log.info("글쓰기 완료")
 

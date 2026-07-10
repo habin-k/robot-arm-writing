@@ -33,6 +33,7 @@ setup(
             # 아래 둘은 단독 모션 테스트용 (task_manager 가 클래스로도 사용).
             'writer = cobot_writing.writer:main',
             'paper_ejector = cobot_writing.paper_ejector_node:main',
+            'test1 = cobot_writing.test1:main',
         ],
     },
 )
