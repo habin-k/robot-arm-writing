@@ -3,9 +3,7 @@ from rclpy.node import Node
 from std_msgs.msg import Bool, Float32MultiArray, String
 from std_srvs.srv import Trigger
 from onrobot_rg_msgs.msg import OnRobotRGInput
-from dsr_msgs2.srv import GetRobotState
 import time
-import threading
 import DR_init
 from enum import Enum
 
@@ -18,21 +16,6 @@ DR_init.__dsr__model = "m0609"
 VEL, ACC = 50, 50
 ROBOT_MODE_MANUAL = 0
 ROBOT_MODE_AUTONOMOUS = 1
-SAFE_STOP_STATES = {5, 9, 10}
-ROBOT_STATE_NAMES = {
-    0: "STATE_INITIALIZING",
-    1: "STATE_STANDBY",
-    2: "STATE_MOVING",
-    3: "STATE_SAFE_OFF",
-    4: "STATE_TEACHING",
-    5: "STATE_SAFE_STOP",
-    6: "STATE_EMERGENCY_STOP",
-    7: "STATE_HOMMING",
-    8: "STATE_RECOVERY",
-    9: "STATE_SAFE_STOP2",
-    10: "STATE_SAFE_OFF2",
-    15: "STATE_NOT_READY",
-}
 
 class RobotState(Enum):
     IDLE = "idle"
@@ -55,13 +38,7 @@ class TaskStateNode(Node):
 
         self.robot_state = RobotState.IDLE
         self.retry_requested = False
-        self.task_active = False
         self._last_published_state = None
-        self.collision_detected = False
-        self.collision_reason = ""
-        self.last_robot_controller_state = None
-        self._robot_state_future = None
-        self._robot_state_service_warned = False
 
         # 그리퍼 파지 검사 우회 플래그 (임시 테스트용).
         #   True  = 정상 (is_gripped 로 펜/도장 파지 확인)
@@ -106,11 +83,6 @@ class TaskStateNode(Node):
             10
         )
         self.create_timer(0.2, self.publish_state)
-        self.robot_state_client = self.create_client(
-            GetRobotState,
-            '/dsr01/system/get_robot_state'
-        )
-        self.create_timer(0.1, self.monitor_robot_controller_state)
         
 
     def paper_callback(self, msg):
@@ -138,11 +110,6 @@ class TaskStateNode(Node):
             res.message = f"재시도 불가: 현재 상태={self.robot_state.value}"
             return res
 
-        if self.task_active:
-            res.success = False
-            res.message = "재시도 불가: 기존 작업 정리 중입니다"
-            return res
-
         if not self.latest_waypoints:
             res.success = False
             res.message = "재시도 불가: 저장된 웨이포인트가 없습니다"
@@ -162,54 +129,9 @@ class TaskStateNode(Node):
         if msg.data != self._last_published_state:
             self.get_logger().info(f"작업 상태 변경: {msg.data}")
             self._last_published_state = msg.data
-
-    def clear_collision(self):
-        self.collision_detected = False
-        self.collision_reason = ""
-        self._robot_state_future = None
-
-    def monitor_robot_controller_state(self):
-        if self.robot_state != RobotState.RUNNING or self.collision_detected:
-            return
-
-        if self._robot_state_future is None:
-            if not self.robot_state_client.service_is_ready():
-                if not self._robot_state_service_warned:
-                    self.get_logger().warn("/dsr01/system/get_robot_state 서비스 대기 중")
-                    self._robot_state_service_warned = True
-                return
-            self._robot_state_service_warned = False
-            self._robot_state_future = self.robot_state_client.call_async(
-                GetRobotState.Request()
-            )
-            return
-
-        if not self._robot_state_future.done():
-            return
-
-        try:
-            result = self._robot_state_future.result()
-        except Exception as e:
-            self.get_logger().warn(f"로봇 상태 조회 실패: {e}")
-            self._robot_state_future = None
-            return
-
-        self._robot_state_future = None
-        if not result or not result.success:
-            return
-
-        state = int(result.robot_state)
-        self.last_robot_controller_state = state
-        if state in SAFE_STOP_STATES:
-            state_name = ROBOT_STATE_NAMES.get(state, f"STATE_{state}")
-            self.collision_detected = True
-            self.collision_reason = f"로봇 안전정지 감지: {state_name}({state})"
-            self.get_logger().error(self.collision_reason)
-            self.robot_state = RobotState.MANUAL_REQUIRED
         
          
 
-         
 class TaskManager:
     def __init__(self, node):
         self.node = node
@@ -264,16 +186,6 @@ class TaskManager:
         # write_state['emergency'] 로 비상정지를 전달 (지금은 estop 미배선).
         self.write_state = {'emergency': False}
         self.writer = PenWriter(node, self.write_state, init_robot=False)
-
-    def check_collision(self):
-        if self.node.collision_detected:
-            raise RuntimeError(self.node.collision_reason or "충돌/안전정지 감지")
-
-    def run_step(self, label, fn, *args):
-        self.check_collision()
-        result = fn(*args)
-        self.check_collision()
-        return result
 
     #—————————단위 동작 함수들———————————
     def grip(self):
@@ -355,41 +267,19 @@ class TaskManager:
         return True
     
     def stamp(self):
-        # fd = [0, 0, -20, 0, 0, 0]
-        # fctrl_dir = [0, 0, 1, 0, 0, 0]
-
         self.node.get_logger().info("도장 찍기")
         self.movel(self.posx(0, 0, 100, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
         self.movel(self.posx(527, 99, 130, 90, 180, 0), vel=VEL, acc=ACC)
         self.movel(self.posx(527, 99, 78, 90, 180, 0), vel=VEL, acc=ACC)
-        # self.wait(0.5)
-        # self.task_compliance_ctrl([2000, 2000, 500, 200, 200, 200])
-        # self.wait(1)
-        # self.set_desired_force(fd, fctrl_dir, mod=self.DR_FC_MOD_REL)
-        # self.wait(1)
-        # self.release_force()
-        # self.wait(0.5)
-        # self.release_compliance_ctrl()
-        # self.wait(0.5)
         self.movel(self.posx(527, 99, 100, 90, 180, 0), vel=VEL, acc=ACC)
         return True
 
     def return_stamp(self):
-        # fd = [0, 0, -20, 0, 0, 0]
-        # fctrl_dir = [0, 0, 1, 0, 0, 0]
-
         self.node.get_logger().info("도장 복귀")
         self.movel(self.posx(527, 99, 130, 90, 180, 0), vel=VEL, acc=ACC)
         self.movel(self.posx(242, 72, 130, 90, 180, 0), vel=VEL, acc=ACC)
         self.movel(self.posx(242, 72, 28, 90, 180, 0), vel=VEL, acc=ACC)
-        # self.wait(0.5)
-        # self.task_compliance_ctrl([2000, 2000, 500, 200, 200, 200])
-        # self.wait(1)
-        # self.set_desired_force(fd, fctrl_dir, mod=self.DR_FC_MOD_REL)
-        # self.wait(1)
-        # self.release_force()
-        # self.wait(0.5)
-        # self.release_compliance_ctrl()
+
         self.wait(0.5)
         self.ungrip()
         return True
@@ -431,8 +321,6 @@ class TaskManager:
                 return True
 
             except Exception as e:
-                if self.node.collision_detected:
-                    raise
                 last_error = e
                 self.node.get_logger().warn(
                     f"{label} 파지 확인 실패: {e}"
@@ -496,7 +384,6 @@ class TaskManager:
 
     def enter_autonomous_mode(self):
         self.node.get_logger().info("AUTONOMOUS 모드 전환 시작")
-        self.node.clear_collision()
         self.write_state['emergency'] = False
         ret = self.set_robot_mode(ROBOT_MODE_AUTONOMOUS)
         if ret != 0:
@@ -505,25 +392,25 @@ class TaskManager:
 
     def run_once(self):
         try:
-            self.run_step("원점 이동", self.go_home)
-            self.run_step("그리퍼 열기", self.ungrip)
+            self.go_home()
+            self.ungrip()
 
             # self.grip_pen()
             # self.is_gripped()
-            self.run_step("펜 파지", self.grip_with_retry, "펜", self.grip_pen, 1)
+            self.grip_with_retry("펜", self.grip_pen, max_retries=1)
 
-            self.run_step("글쓰기", self.write)
-            self.run_step("펜 복귀", self.return_pen)
+            self.write()
+            self.return_pen()
 
             # self.grip_stamp()
             # self.is_gripped()
-            self.run_step("도장 파지", self.grip_with_retry, "도장", self.grip_stamp, 1)
+            self.grip_with_retry("도장", self.grip_stamp, max_retries=1)
 
-            self.run_step("도장 찍기", self.stamp)
-            self.run_step("도장 복귀", self.return_stamp)
+            self.stamp()
+            self.return_stamp()
 
-            self.run_step("종이 배출", self.eject_paper)
-            self.run_step("원점 복귀", self.go_home)
+            self.eject_paper()
+            self.go_home()
             self.node.robot_state = RobotState.IDLE
 
         except Exception as e:
@@ -552,26 +439,6 @@ def main(args=None):
     sequencer.set_tcp("Tool Weight")
     
     node.get_logger().info("task_manager_new 시작")
-
-    def start_task_thread(prepare_autonomous=False):
-        if node.task_active:
-            node.get_logger().warn("작업이 이미 실행 중입니다")
-            return
-
-        def _target():
-            try:
-                if prepare_autonomous:
-                    sequencer.enter_autonomous_mode()
-                node.robot_state = RobotState.RUNNING
-                sequencer.run_once()
-            except Exception as e:
-                node.get_logger().error(f"작업 스레드 오류: {e}")
-                sequencer.enter_manual_recovery_mode()
-            finally:
-                node.task_active = False
-
-        node.task_active = True
-        threading.Thread(target=_target, daemon=True).start()
     
     try:
         while rclpy.ok():
@@ -579,14 +446,20 @@ def main(args=None):
 
             if node.start_task and node.robot_state == RobotState.IDLE:
                 node.start_task = False
-                node.clear_collision()
                 sequencer.write_state['emergency'] = False
-                start_task_thread()
+                node.robot_state = RobotState.RUNNING
+                sequencer.run_once()
 
             elif node.retry_requested and node.robot_state == RobotState.MANUAL_REQUIRED:
                 node.retry_requested = False
                 node.get_logger().info("관리자 수동 복구 후 작업 재시도 시작")
-                start_task_thread(prepare_autonomous=True)
+                try:
+                    sequencer.enter_autonomous_mode()
+                    node.robot_state = RobotState.RUNNING
+                    sequencer.run_once()
+                except Exception as e:
+                    node.get_logger().error(f"재시도 시작 실패: {e}")
+                    sequencer.enter_manual_recovery_mode()
                 
             else:
                 time.sleep(0.1)
