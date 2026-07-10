@@ -58,7 +58,7 @@ USER_COORD_ID = 102
 #
 # ★ 그리기 z 는 상수가 아니라 '접촉 감지'로 매 획마다 새로 정한다
 #   (웨이포인트에서는 x/y·pen 플래그만 사용).
-FORCE_ON_Z        = 107     # 위치제어로 하강할 목표 z & 순응+힘제어를 켜는 높이 (BASE, mm)
+FORCE_ON_Z        = 100     # 위치제어로 하강할 목표 z & 순응+힘제어를 켜는 높이 (BASE, mm)
                             #   ★ 실제 그리기/접촉 높이(붓펜 z≈100)보다 반드시 '위(=값이 큼)' 여야 함.
                             #     아래로 잡으면 위치제어로 종이를 뚫고 박음. = 그리기면 + 약 10mm 여유
 HOVER_HEIGHT      = 30.0    # 획 그린 뒤 올리는 높이 & 공이동 hover 높이 (mm)
@@ -71,13 +71,13 @@ WRITE_STIFFNESS  = [3000, 3000, 3000, 200, 200, 200]  # X/Y 강성 높게, Z 낮
 
 # 접촉 감지: 순응+힘제어로 하강 중, Z 외력이 이 값을 넘으면 '바닥 접촉'으로 판단하고
 #            하강 대기를 끝낸다. 접촉 감지 후에는 순응/힘 제어를 끄고 위치제어로 그린다.
-CONTACT_FORCE_N   = 2.4       # N (바닥 접촉 판단 힘)
+CONTACT_FORCE_N   = 2.4       # N (바닥 접촉 판단 힘)   1. 두꺼운 펜에서의 값 : 2.4 얇은 펜에서의 값 : 1.8
 CONTACT_DEBOUNCE  = 5         # |Fz|가 임계를 '연속 이 횟수'(×0.01s=0.05s) 넘어야 접촉 확정 (노이즈 스파이크 무시)
 
-WRITE_VEL  = [60.0, 60.0]    # 글씨 쓰기 (품질 별로면 40 정도로 낮출 것)
-WRITE_ACC  = [120.0, 120.0]
-TRAVEL_VEL = [80.0, 60.0]    # 공이동 (빠름)
-TRAVEL_ACC = [100.0, 80.0]
+WRITE_VEL  = [90.0, 90.0]    # 글씨 쓰기 (품질 별로면 40 정도로 낮출 것)
+WRITE_ACC  = [180.0, 180.0]
+TRAVEL_VEL = [160.0, 120.0]    # 공이동 (빠름)
+TRAVEL_ACC = [200.0, 160.0]
 PROBE_VEL  = [8.0, 8.0]      # 표면 접근 (매우 느림)
 PROBE_ACC  = [15.0, 15.0]
 
@@ -207,6 +207,9 @@ class PenWriter:
 
         self._last_pose_t = 0.0
         self._contact_z   = None
+        # 바닥 접촉 판단 힘(N). 기본은 모듈 상수, 펜 종류에 따라 set_contact_force 로 교체.
+        #   (task_manager 가 선택 펜의 접촉힘을 draw 전에 넣어 준다.)
+        self.contact_force = CONTACT_FORCE_N
 
     # ── 발행 헬퍼 ──────────────────────────────────────────────────────────
 
@@ -215,6 +218,12 @@ class PenWriter:
 
     # 하위호환 별칭 (pub_sub 내부명)
     _status = publish_status
+
+    def publish_no_paper(self):
+        """종이 없음 알림 — HMI 가 '종이가 없어 시작 불가'를 표시하도록 상태 발행.
+        task_manager 가 종이 미감지로 작업을 시작하지 않을 때 호출한다.
+        (서버 ros_node.STATUS_MAP 에서 NO_PAPER → error 로 매핑됨)"""
+        self.publish_status("NO_PAPER")
 
     def _progress(self, done, total):
         """획 진행 발행 [완료 획 수, 전체 획 수]."""
@@ -305,12 +314,18 @@ class PenWriter:
             self.publish_live()
             self.wait(poll)
 
+    def set_contact_force(self, force_n):
+        """바닥 접촉 판단 힘(N)을 교체한다. task_manager 가 선택 펜(빨강 2.4 / 얇은 펜 1.8)에
+        맞춰 draw() 호출 전에 넣어 준다."""
+        self.contact_force = float(force_n)
+        self.log.info(f"접촉 판단 힘 설정: {self.contact_force:.2f} N")
+
     def _wait_for_contact(self):
         """
         순응+힘제어로 하강하는 동안 get_tool_force 로 Z 외력을 감시해 바닥 접촉을 감지한다.
 
         ★ 노이즈 스파이크 오감지 방지(디바운스):
-          |Fz| 가 CONTACT_FORCE_N 을 '연속 CONTACT_DEBOUNCE 회' 넘을 때만 접촉으로 확정한다.
+          |Fz| 가 self.contact_force 를 '연속 CONTACT_DEBOUNCE 회' 넘을 때만 접촉으로 확정한다.
           한두 샘플만 튀는 노이즈는 카운터가 리셋되어 무시된다.
         접촉 확정 시점의 z(mm)를 반환한다.
         """
@@ -327,9 +342,9 @@ class PenWriter:
                 self.wait(0.01)
                 continue
 
-            hits = hits + 1 if abs(fz) >= CONTACT_FORCE_N else 0
+            hits = hits + 1 if abs(fz) >= self.contact_force else 0
             self.log.info(f"    하강 중  Fz = {fz:+.2f} N   z = {pz:.2f} mm   "
-                          f"(임계 {CONTACT_FORCE_N} N, 연속 {hits}/{CONTACT_DEBOUNCE})")
+                          f"(임계 {self.contact_force} N, 연속 {hits}/{CONTACT_DEBOUNCE})")
 
             if hits >= CONTACT_DEBOUNCE:
                 contact_z = pz
