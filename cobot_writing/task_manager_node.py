@@ -1,3 +1,4 @@
+import json
 import queue
 import threading
 import time
@@ -5,6 +6,7 @@ import time
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor
+from rclpy.qos import QoSProfile, DurabilityPolicy, HistoryPolicy
 from std_msgs.msg import Bool, Float32MultiArray, String
 from std_srvs.srv import Trigger
 from onrobot_rg_msgs.msg import OnRobotRGInput
@@ -34,8 +36,8 @@ DR_BASE_REF     = 0   # 조그 기준 좌표 = BASE
 #   z(hover 197 / 파지 108.5)와 파지 후 상승은 세 펜 공통.
 PENS = {
     'red':    {'x': 237.0,  'y': -28.0,   'contact_force': 2.4},
-    'purple': {'x': 235.69, 'y': -105.47, 'contact_force': 1.8},
-    'cyan':   {'x': 233.34, 'y': -191.10, 'contact_force': 1.8},
+    'purple': {'x': 236.04, 'y': -188.02, 'contact_force': 1.8},
+    'cyan':   {'x': 241.11, 'y': -105.35, 'contact_force': 1.8},
 }
 DEFAULT_PEN = 'red'
 
@@ -131,6 +133,14 @@ class TaskStateNode(Node):
         self.selected_pen = DEFAULT_PEN
         self.create_subscription(String,            '/robot/pen',             self._on_pen,   10)
 
+        # HMI 관리자 파라미터 설정 (글씨/공이동 속도·힘·접촉힘). 콜백은 JSON 저장만 하고
+        # 실제 적용은 메인 스레드에서 한다. transient_local(latched) → 노드가 나중에 떠도
+        # 서버가 마지막으로 발행한 값을 자동 수신한다 (재시작해도 설정 유지).
+        self.pending_tuning = None
+        tuning_qos = QoSProfile(depth=1, history=HistoryPolicy.KEEP_LAST,
+                                durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.create_subscription(String,            '/robot/tuning',          self._on_tuning, tuning_qos)
+
     def paper_callback(self, msg):
         # 종이 유무만 저장한다. 시작 트리거는 HMI 시작 버튼(웨이포인트 수신)으로 옮김.
         # (종이 센서로 자동 시작하면 task_manager 켜자마자 로봇이 움직여버림)
@@ -199,6 +209,14 @@ class TaskStateNode(Node):
             self.get_logger().info(f"펜 선택: {pen}")
         else:
             self.get_logger().warn(f"알 수 없는 펜: {pen} (무시)")
+
+    def _on_tuning(self, msg):
+        # HMI 관리자 파라미터 설정 → JSON 파싱해서 저장만. 실제 적용은 메인 루프에서.
+        try:
+            self.pending_tuning = json.loads(msg.data)
+            self.get_logger().info(f"모션 파라미터 수신: {self.pending_tuning}")
+        except Exception as e:
+            self.get_logger().warn(f"모션 파라미터 파싱 실패: {e}")
 
     def _on_jog(self, msg):
         # 연속 조그: [axis_idx(0~5), speed_signed]. speed!=0 이동 시작, 0 정지.
@@ -485,6 +503,11 @@ class TaskManager:
             self.node.get_logger().error(f"MANUAL 모드 전환 실패: {e}")
 
         self.node.robot_state = RobotState.MANUAL_REQUIRED
+        # HMI 알림: 관리자 수동 복구 팝업(작업 재시도)을 띄우도록 상태 발행.
+        try:
+            self.writer.publish_status("MANUAL_REQUIRED")
+        except Exception as e:
+            self.node.get_logger().warn(f"MANUAL_REQUIRED 상태 발행 실패: {e}")
 
     def enter_autonomous_mode(self):
         self.node.get_logger().info("AUTONOMOUS 모드 전환 시작")
@@ -515,6 +538,24 @@ class TaskManager:
             self.node.get_logger().error(f"수동 명령 '{cmd}' 실행 실패: {e}")
         finally:
             self.state['busy'] = False
+
+    def apply_tuning(self, params):
+        """HMI 관리자 파라미터 설정 반영: 모션 파라미터(writer) + 펜별 접촉힘(PENS).
+        메인 스레드에서만 호출된다 (DSR 호출 없이 인스턴스 변수만 교체)."""
+        # 글씨/공이동 속도·가속, 붓 누르는 힘 → writer 인스턴스 변수
+        self.writer.apply_tuning(params)
+        # 펜별 접촉 판단 힘 → PENS 갱신 (다음 run_once 의 set_contact_force 에 반영)
+        cf = params.get('contact_force')
+        if isinstance(cf, dict):
+            for pen, val in cf.items():
+                if pen in PENS:
+                    try:
+                        PENS[pen]['contact_force'] = float(val)
+                    except (TypeError, ValueError):
+                        self.node.get_logger().warn(f"접촉힘 값 무시: {pen}={val}")
+            self.node.get_logger().info(
+                f"펜별 접촉힘 갱신: " +
+                ", ".join(f"{p}={PENS[p]['contact_force']}" for p in PENS))
 
     def do_reset(self):
         """에러 리셋: 자율 모드 복귀 + 비상정지 플래그 해제 + IDLE 로 복귀."""
@@ -602,6 +643,12 @@ def main(args=None):
 
     try:
         while rclpy.ok():
+            # 3-0) HMI 파라미터 설정 반영 (콜백이 저장한 값을 메인 스레드에서 적용 — DSR 호출 없음)
+            if node.pending_tuning is not None:
+                params = node.pending_tuning
+                node.pending_tuning = None
+                sequencer.apply_tuning(params)
+
             # 3-1) HMI 수동 제어 명령 우선 처리 (grip/ungrip/home/reset)
             try:
                 cmd, data = cmd_queue.get_nowait()

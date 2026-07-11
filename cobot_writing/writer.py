@@ -74,7 +74,7 @@ WRITE_STIFFNESS  = [3000, 3000, 3000, 200, 200, 200]  # X/Y 강성 높게, Z 낮
 CONTACT_FORCE_N   = 2.4       # N (바닥 접촉 판단 힘)   1. 두꺼운 펜에서의 값 : 2.4 얇은 펜에서의 값 : 1.8
 CONTACT_DEBOUNCE  = 5         # |Fz|가 임계를 '연속 이 횟수'(×0.01s=0.05s) 넘어야 접촉 확정 (노이즈 스파이크 무시)
 
-WRITE_VEL  = [90.0,  90.0]    # 글씨 쓰기 (품질 별로면 40 정도로 낮출 것)
+WRITE_VEL  = [270.0,  270.0]    # 글씨 쓰기 (품질 별로면 40 정도로 낮출 것)
 WRITE_ACC  = [180.0, 180.0]
 TRAVEL_VEL = [160.0, 120.0]    # 공이동 (빠름)
 TRAVEL_ACC = [200.0, 160.0]
@@ -147,6 +147,9 @@ class PenWriter:
         self.status_pub   = node.create_publisher(String,             '/robot/status', 10)
         self.pose_pub     = node.create_publisher(Float32MultiArray,  '/robot/current_pose', 10)
         self.force_pub    = node.create_publisher(Float32MultiArray,  '/robot/force', 10)
+        # BASE 좌표계 좌표·외력 (HMI 에서 User_102 / BASE 선택 표시용)
+        self.pose_base_pub  = node.create_publisher(Float32MultiArray, '/robot/current_pose_base', 10)
+        self.force_base_pub = node.create_publisher(Float32MultiArray, '/robot/force_base', 10)
         self.progress_pub = node.create_publisher(Float32MultiArray,  '/robot/progress', 10)
 
         from DSR_ROBOT2 import (
@@ -211,6 +214,14 @@ class PenWriter:
         #   (task_manager 가 선택 펜의 접촉힘을 draw 전에 넣어 준다.)
         self.contact_force = CONTACT_FORCE_N
 
+        # ── 런타임 조절 파라미터 (HMI 관리자 → /robot/tuning 으로 실시간 교체) ──
+        # 모듈 상수를 기본값으로 인스턴스 변수화. 코드 수정/재빌드 없이 apply_tuning 으로 갱신.
+        self.write_vel    = list(WRITE_VEL)
+        self.write_acc    = list(WRITE_ACC)
+        self.travel_vel   = list(TRAVEL_VEL)
+        self.travel_acc   = list(TRAVEL_ACC)
+        self.write_force_z = WRITE_FORCE_Z
+
     # ── 발행 헬퍼 ──────────────────────────────────────────────────────────
 
     def publish_status(self, s):
@@ -260,7 +271,7 @@ class PenWriter:
             return
         self._last_pose_t = now
 
-        # 현재 좌표 (User_102) — get_current_posx 는 User 좌표를 직접 지원
+        # 현재 좌표 — User_102 & BASE 둘 다 발행 (HMI 에서 좌표계 선택)
         try:
             res = self.get_current_posx(ref=USER_COORD_ID)
             if res is not None and res[0] is not None:
@@ -268,9 +279,17 @@ class PenWriter:
                 msg.data = [float(v) for v in res[0][:6]]
                 self.pose_pub.publish(msg)
         except Exception as e:
-            self.log.warning(f"좌표 발행 실패: {e}")
+            self.log.warning(f"좌표 발행 실패(User_102): {e}")
+        try:
+            resb = self.get_current_posx(ref=self.DR_BASE)
+            if resb is not None and resb[0] is not None:
+                msgb = Float32MultiArray()
+                msgb.data = [float(v) for v in resb[0][:6]]
+                self.pose_base_pub.publish(msgb)
+        except Exception as e:
+            self.log.warning(f"좌표 발행 실패(BASE): {e}")
 
-        # 현재 TCP 외력 (User_102) [fx,fy,fz,tx,ty,tz]
+        # 현재 TCP 외력 — User_102 & BASE 둘 다 발행 [fx,fy,fz,tx,ty,tz]
         if force:
             try:
                 fu = self._force_user102()
@@ -279,7 +298,15 @@ class PenWriter:
                     fmsg.data = fu
                     self.force_pub.publish(fmsg)
             except Exception as e:
-                self.log.warning(f"외력 발행 실패: {e}")
+                self.log.warning(f"외력 발행 실패(User_102): {e}")
+            try:
+                fb = self.get_tool_force(ref=self.DR_BASE)
+                if isinstance(fb, (list, tuple)) and len(fb) >= 6:
+                    fbmsg = Float32MultiArray()
+                    fbmsg.data = [float(v) for v in fb[:6]]
+                    self.force_base_pub.publish(fbmsg)
+            except Exception as e:
+                self.log.warning(f"외력 발행 실패(BASE): {e}")
 
     # 하위호환 별칭 (pub_sub 내부명)
     _publish_live = publish_live
@@ -288,7 +315,7 @@ class PenWriter:
 
     def _enable_write_force(self):
         """순응 제어 + 목표 힘(-3N) ON — 붓을 종이에 일정 힘으로 누른다."""
-        fd = [0, 0, WRITE_FORCE_Z, 0, 0, 0]
+        fd = [0, 0, self.write_force_z, 0, 0, 0]
         self.task_compliance_ctrl(WRITE_STIFFNESS)
         self.wait(0.1)
         self.set_desired_force(fd, dir=WRITE_FORCE_DIR, mod=self.DR_FC_MOD_REL)
@@ -319,6 +346,32 @@ class PenWriter:
         맞춰 draw() 호출 전에 넣어 준다."""
         self.contact_force = float(force_n)
         self.log.info(f"접촉 판단 힘 설정: {self.contact_force:.2f} N")
+
+    def apply_tuning(self, params: dict):
+        """HMI 관리자탭에서 보낸 모션 파라미터를 실시간 반영한다 (재빌드/재시작 불필요).
+        params 예: {'write_vel':[..], 'write_acc':[..], 'travel_vel':[..],
+                   'travel_acc':[..], 'write_force_z': -3}. 없는 키는 무시(기존값 유지)."""
+        def _vel2(key, cur):
+            v = params.get(key)
+            try:
+                if isinstance(v, (list, tuple)) and len(v) == 2:
+                    return [float(v[0]), float(v[1])]
+            except (TypeError, ValueError):
+                pass
+            return cur
+        self.write_vel     = _vel2('write_vel',  self.write_vel)
+        self.write_acc     = _vel2('write_acc',  self.write_acc)
+        self.travel_vel    = _vel2('travel_vel', self.travel_vel)
+        self.travel_acc    = _vel2('travel_acc', self.travel_acc)
+        if 'write_force_z' in params:
+            try:
+                self.write_force_z = float(params['write_force_z'])
+            except (TypeError, ValueError):
+                pass
+        self.log.info(
+            f"모션 파라미터 갱신: write_vel={self.write_vel} write_acc={self.write_acc} "
+            f"travel_vel={self.travel_vel} travel_acc={self.travel_acc} "
+            f"write_force_z={self.write_force_z}")
 
     def _wait_for_contact(self):
         """
@@ -389,7 +442,7 @@ class PenWriter:
         if before is not None and before[0] is not None:
             self.log.info(f"     이동 전 실제  X={before[0][0]:.1f}  Y={before[0][1]:.1f}")
 
-        self.movel(self.posx(fx, fy, HOVER_Z,    frx, fry, frz), vel=TRAVEL_VEL, acc=TRAVEL_ACC)
+        self.movel(self.posx(fx, fy, HOVER_Z,    frx, fry, frz), vel=self.travel_vel, acc=self.travel_acc)
         after = self.get_current_posx()
         if after is not None and after[0] is not None:
             self.log.info(f"     hover 이동 후 실제  X={after[0][0]:.1f}  Y={after[0][1]:.1f}")
@@ -423,15 +476,15 @@ class PenWriter:
                 return
             chunk = path[s:s + MOVESX_MAX_PTS]
             if len(chunk) == 1:
-                self.amovel(chunk[0], vel=WRITE_VEL, acc=WRITE_ACC)
+                self.amovel(chunk[0], vel=self.write_vel, acc=self.write_acc)
             else:
-                self.amovesx(chunk, vel=WRITE_VEL, acc=WRITE_ACC)
+                self.amovesx(chunk, vel=self.write_vel, acc=self.write_acc)
             self._wait_motion_done()   # 이동 완료까지 폴링하며 pose/force 발행
             # 그리는 동안 붓이 잘 눌리는지(=종이 평탄도) 확인: 위치제어라 힘은 '측정'만 됨
             self._log_zf(f"그리는 중 {min(s + MOVESX_MAX_PTS, len(path))}/{len(path)}점")
 
         self.movel(self.posx(lx, ly, contact_z + HOVER_HEIGHT, lrx, lry, lrz),
-                   vel=TRAVEL_VEL, acc=TRAVEL_ACC)
+                   vel=self.travel_vel, acc=self.travel_acc)
 
     def draw(self, waypoints):
         """
@@ -490,7 +543,7 @@ class PenWriter:
             cx, cy, cz, crx, cry, crz = res[0][:6]
             safe_z = max(cz, FORCE_ON_Z + SAFE_Z_CLEARANCE)  # 아래로는 안 내려감
             self.movel(self.posx(cx, cy, safe_z, crx, cry, crz),
-                       vel=TRAVEL_VEL, acc=TRAVEL_ACC)
+                       vel=self.travel_vel, acc=self.travel_acc)
         self.movej(self.posj(*HOME_JOINT), vel=10, acc=10)
         self.wait(0.3)
         self.publish_live()   # 홈 복귀 후 좌표 갱신
