@@ -1,0 +1,194 @@
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-content: start;
+  flex: 1;
+}
+
+/* 공통 카드 (기존 탭과 동일 톤) */
+.card,
+.cardFull,
+.hero {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: 0 1px 2px rgba(23, 25, 28, 0.04);
+}
+.cardFull, .hero { grid-column: 1 / -1; }
+
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 16px;
+}
+
+.dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.mono { font-family: var(--font-mono); }
+
+/* ── 시스템 상태 배너 ── */
+.heroMain {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.heroState {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+}
+.heroState .dot { width: 14px; height: 14px; }
+.heroSub { font-size: 13px; color: var(--ink-faint); }
+
+.kpiRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  background: var(--paper-sunk);
+  border-radius: 8px;
+}
+.kpiLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.kpiValue {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.kpiSub { font-size: 11px; color: var(--ink-faint); }
+
+.modeTag {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 10px;
+  border-radius: 6px;
+}
+.modeAuto   { color: var(--ok);     background: #eafaf1; }
+.modeManual { color: var(--danger); background: #fdeceb; }
+
+/* ── 작업 진행률 (StatusTab 스타일 준용) ── */
+.pctRow { display: flex; align-items: baseline; gap: 6px; margin-bottom: 16px; }
+.pctNum {
+  font-size: 56px; font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.pctUnit { font-size: 22px; color: var(--ink-faint); font-weight: 300; }
+.progressBar {
+  height: 5px; background: var(--line); border-radius: 3px;
+  overflow: hidden; margin-bottom: 20px;
+}
+.progressFill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+.detailGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.detailItem { display: flex; flex-direction: column; gap: 6px; }
+.detailLabel {
+  font-size: 11px; color: var(--ink-soft); font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+.detailValue {
+  font-size: 22px; font-weight: 600; color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 로봇 상태 요약 (AdminTab coord 스타일 준용) ── */
+.wsDot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-ghost); margin-left: auto; }
+.wsOn { background: var(--ok); }
+.coordGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.coordCell {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--paper-sunk);
+}
+.coordAxis { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: var(--ink-faint); }
+.coordVal { font-family: var(--font-mono); font-size: 18px; font-weight: 600; color: var(--ink); }
+.coordUnit { font-size: 10px; font-weight: 400; color: var(--ink-faint); margin-left: 3px; }
+
+/* ── 알람 / 경고 ── */
+.alarmCount {
+  margin-left: 2px;
+  font-size: 11px; font-weight: 700;
+  color: #fff; background: var(--danger);
+  border-radius: 10px; padding: 1px 8px;
+  letter-spacing: 0;
+}
+.allClear {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px; color: var(--ink-soft);
+  padding: 14px 16px;
+  background: #f2fbf6; border: 1px solid #cdeedb; border-radius: 8px;
+}
+.alarmList { display: flex; flex-direction: column; gap: 8px; }
+.alarmRow {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid;
+}
+.crit { background: #fdeceb; border-color: #f3cfcb; }
+.warn { background: #fdf7e9; border-color: #f0e3c2; }
+.alarmBadge {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+  padding: 3px 9px; border-radius: 5px; color: #fff; flex-shrink: 0;
+}
+.crit .alarmBadge { background: var(--danger); }
+.warn .alarmBadge { background: #c98a1e; }
+.alarmMsg { font-size: 13px; color: var(--ink); font-weight: 500; }
+
+/* 세션 알람 이력 */
+.histTitle {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--ink-faint);
+  margin: 22px 0 10px;
+}
+.histEmpty { font-size: 12px; color: var(--ink-faint); }
+.histList {
+  display: flex; flex-direction: column;
+  max-height: 220px; overflow-y: auto;
+}
+.histRow {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.histRow:first-child { border-top: none; }
+.histTime { font-family: var(--font-mono); color: var(--ink-faint); flex-shrink: 0; }
+.histLevel { font-weight: 700; flex-shrink: 0; width: 30px; }
+.critText { color: var(--danger); }
+.warnText { color: #c98a1e; }
+.histMsg { color: var(--ink-soft); }
+
+/* ── 모바일 반응형 ── */
+@media (max-width: 768px) {
+  .layout { grid-template-columns: 1fr; }
+  .kpiRow { grid-template-columns: repeat(2, 1fr); }
+}

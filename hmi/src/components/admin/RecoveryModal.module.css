@@ -1,0 +1,103 @@
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(23, 25, 28, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+}
+
+.modal {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--danger);
+  border-radius: 12px;
+  padding: 28px;
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 24px 60px rgba(23, 25, 28, 0.28);
+}
+
+.iconRow { display: flex; align-items: center; gap: 10px; }
+.icon { font-size: 22px; }
+
+.title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.desc {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  margin: 0;
+}
+.reason {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+  margin: 0;
+}
+
+.result {
+  font-size: 12px;
+  color: var(--ok);
+  padding: 8px 12px;
+  background: #ecfdf3;
+  border: 1px solid #c3ecd4;
+  border-radius: 6px;
+}
+
+.actions { display: flex; gap: 8px; margin-top: 2px; }
+
+.btnPrimary {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 12px;
+  border-radius: 7px;
+  border: none;
+  background: var(--danger);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.btnPrimary:hover:not(:disabled) { background: var(--danger-2); }
+.btnPrimary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btnSecondary {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 12px;
+  border-radius: 7px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.btnSecondary:hover:not(:disabled) { border-color: var(--ink-soft); color: var(--ink); }
+.btnSecondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.dismiss {
+  align-self: center;
+  background: none;
+  border: none;
+  color: var(--ink-faint);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 8px;
+}
+.dismiss:hover:not(:disabled) { color: var(--ink); }
+.dismiss:disabled { opacity: 0.5; cursor: not-allowed; }
