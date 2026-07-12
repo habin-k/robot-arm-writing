@@ -47,25 +47,86 @@ flowchart TD
     H --> I{"종이 감지됨?"}
     I -- 아니오 --> J[NO_PAPER 상태 표시]
     I -- 예 --> K[펜 파지]
-    K --> L[힘 제어 기반 필기]
+    K --> K1{"파지 성공?"}
+    K1 -- 아니오 --> K2[펜 파지 재시도]
+    K2 --> K1
+    K1 -- 예 --> L[힘 제어 기반 필기]
     L --> M[펜 반납]
     M --> N[도장 파지 및 도장 찍기]
-    N --> O[종이 배출]
+    N --> N1{"도장 파지 성공?"}
+    N1 -- 아니오 --> N2[도장 파지 재시도]
+    N2 --> N1
+    N1 -- 예 --> O[종이 배출]
     O --> P[원점 복귀 및 작업 완료]
+
+    K1 -- 최종 실패 --> Q[MANUAL_REQUIRED 상태 표시]
+    N1 -- 최종 실패 --> Q
+    L -- 비상정지 또는 모션 오류 --> Q
+    O -- 배출 오류 --> Q
+    Q --> R[관리자 수동 복구]
+    R --> S{"재시도 요청?"}
+    S -- 예 --> I
+    S -- 아니오 --> T[작업 중단]
 ```
 
-### 1.3 주요 ROS2 노드와 토픽
+### 1.3 주요 ROS2 노드, 토픽, 서비스
 
-| 구분 | 이름 | 역할 |
+#### 노드
+
+| 노드 | 실행 위치 | 역할 |
 | :--- | :--- | :--- |
-| 노드 | `paper_sensor_publisher` | Arduino 시리얼 값을 읽어 종이 감지 상태 발행 |
-| 노드 | `writing_publisher` | FastAPI 내부 ROS2 노드, HMI 요청을 ROS2 토픽으로 변환 |
-| 노드 | `task_manager` | 종이 확인, 펜/도장 파지, 필기, 배출 전체 시퀀스 수행 |
-| 토픽 | `/paper_sensor` | 종이 감지 여부 (`std_msgs/Bool`) |
-| 토픽 | `/robot/target_moving` | 필기 웨이포인트 (`std_msgs/Float32MultiArray`) |
-| 토픽 | `/robot/status` | 로봇 작업 상태 |
-| 토픽 | `/robot/current_pose`, `/robot/force` | HMI 표시용 TCP 좌표와 외력 |
-| 토픽 | `/robot/progress` | 필기 진행률 |
+| `paper_sensor_publisher` | `hand_writing.launch.py` | Arduino 시리얼 값을 읽어 종이 감지 상태 발행 |
+| `writing_publisher` | FastAPI 서버 내부 | HMI/API 요청을 ROS2 토픽과 서비스 호출로 변환 |
+| `task_manager` | `hand_writing.launch.py` | 종이 확인, 펜/도장 파지, 필기, 배출 전체 시퀀스 수행 |
+| `dsr_motion` | `task_manager` 내부 | DSR 모션 함수 호출용 ROS2 노드 |
+| `m0609_rg2_bringup` 관련 노드 | `hand_writing.launch.py`에서 include | Doosan M0609 및 OnRobot RG2 bringup |
+
+#### 서버가 발행하는 제어 토픽
+
+| 토픽 | 타입 | 역할 |
+| :--- | :--- | :--- |
+| `/robot/target_moving` | `std_msgs/Float32MultiArray` | 필기 웨이포인트 전달 |
+| `/robot/pen` | `std_msgs/String` | 사용할 펜 색상 선택 |
+| `/robot/tuning` | `std_msgs/String` | 관리자 모션/경로 파라미터 전달 |
+| `/safety/emergency_stop` | `std_msgs/Bool` | 비상정지 명령 |
+| `/robot/go_home` | `std_msgs/Bool` | 원점 복귀 명령 |
+| `/robot/error_reset` | `std_msgs/Bool` | 에러 리셋 명령 |
+| `/robot/jog` | `std_msgs/Float32MultiArray` | HMI 수동 조그 명령 |
+| `/robot/grip` | `std_msgs/Bool` | 그리퍼 수동 열기/닫기 명령 |
+
+#### task_manager가 구독하는 입력 토픽
+
+| 토픽 | 타입 | 역할 |
+| :--- | :--- | :--- |
+| `/paper_sensor` | `std_msgs/Bool` | 종이 감지 상태 |
+| `/robot/target_moving` | `std_msgs/Float32MultiArray` | 작업 시작 트리거 및 웨이포인트 |
+| `/robot/pen` | `std_msgs/String` | 작업에 사용할 펜 선택 |
+| `/robot/tuning` | `std_msgs/String` | 속도, 힘, 접촉 판단값 등 튜닝값 |
+| `/safety/emergency_stop` | `std_msgs/Bool` | 작업 중단 요청 |
+| `/robot/go_home` | `std_msgs/Bool` | 원점 복귀 요청 |
+| `/robot/error_reset` | `std_msgs/Bool` | 수동 복구 후 에러 리셋 |
+| `/robot/jog` | `std_msgs/Float32MultiArray` | 수동 조그 요청 |
+| `/robot/grip` | `std_msgs/Bool` | 수동 그리퍼 제어 |
+| `/OnRobotRGInput` | `onrobot_rg_msgs/OnRobotRGInput` | 그리퍼 폭 피드백 및 파지 성공 판단 |
+
+#### 로봇 상태 피드백 토픽
+
+| 토픽 | 타입 | 역할 |
+| :--- | :--- | :--- |
+| `/robot/status` | `std_msgs/String` | `WRITING`, `IDLE`, `NO_PAPER`, `MANUAL_REQUIRED` 등 작업 상태 |
+| `/robot/current_pose` | `std_msgs/Float32MultiArray` | HMI 표시용 TCP 좌표 |
+| `/robot/current_pose_base` | `std_msgs/Float32MultiArray` | BASE 기준 TCP 좌표 |
+| `/robot/force` | `std_msgs/Float32MultiArray` | HMI 표시용 TCP 외력 |
+| `/robot/force_base` | `std_msgs/Float32MultiArray` | BASE 기준 TCP 외력 |
+| `/robot/progress` | `std_msgs/Float32MultiArray` | 필기 진행률 `[완료 획, 전체 획]` |
+
+#### 서비스
+
+| 서비스 | 타입 | 역할 |
+| :--- | :--- | :--- |
+| `/dsr01/task_manager/retry` | `std_srvs/Trigger` | 수동 복구 후 같은 웨이포인트로 작업 재시도 |
+| `/dsr01/motion/move_stop` | `dsr_msgs2/MoveStop` | 비상정지 시 진행 중 모션 정지 |
+| `/dsr01/motion/jog` | `dsr_msgs2/Jog` | HMI 수동 조그 명령 전달 |
 
 ---
 
