@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { goHome, emergencyStop, errorReset, jog, grip, ungrip } from '../../api/robot'
+import { goHome, emergencyStop, jog, grip, ungrip } from '../../api/robot'
 import { useRobotState } from '../../hooks/useRobotState'
 import styles from './AdminTab.module.css'
 
@@ -20,13 +20,21 @@ const SPEEDS = [
 export default function AdminTab({ estopOnly }) {
   const [speed, setSpeed] = useState(30)
   const [feedback, setFeedback] = useState('')
+  const [frame, setFrame] = useState('user102')   // 'user102' | 'base' 좌표계 선택
   const activeAxis = useRef(null)
   const { robot, connected } = useRobotState()
 
+  // 선택한 좌표계에 맞는 좌표·외력 (BASE 값이 아직 없으면 User_102 로 폴백)
+  const isBase   = frame === 'base'
+  const pos      = (isBase ? robot.tcp_position_base : robot.tcp_position) ?? robot.tcp_position
+  const forceArr = (isBase ? robot.tcp_force_base    : robot.tcp_force)    ?? robot.tcp_force
+  const frameLabel = isBase ? 'BASE' : 'User 102'
+
   const send = async (fn, msg) => {
     try {
-      await fn()
-      setFeedback(msg)
+      const res = await fn()
+      // 서버가 돌려준 메시지(예: 재시도 결과)가 있으면 그것을, 없으면 기본 문구를 표시.
+      setFeedback(res?.data?.message || msg)
       setTimeout(() => setFeedback(''), 2500)
     } catch (e) {
       setFeedback('오류: ' + (e.response?.data?.detail || e.message))
@@ -77,9 +85,6 @@ export default function AdminTab({ estopOnly }) {
             <button className={styles.actionBtn} onClick={() => send(goHome, '원점 복귀 명령 전송')}>
               ⌂ 원점 복귀
             </button>
-            <button className={styles.actionBtn} onClick={() => send(errorReset, '에러 리셋 명령 전송')}>
-              ↺ 에러 리셋
-            </button>
             <div className={styles.gripRow}>
               <button className={styles.actionBtn} onClick={() => send(grip, 'Grip 명령 전송')}>
                 ✊ Grip
@@ -103,19 +108,25 @@ export default function AdminTab({ estopOnly }) {
               ))}
             </div>
 
-            <span className={styles.jogLabel}>X / Y</span>
-            <div className={styles.dpad}>
-              <div /><JogBtn axis="y" dir={1} label="Y+" /><div />
-              <JogBtn axis="x" dir={-1} label="X−" />
-              <div className={styles.dpadCenter} />
-              <JogBtn axis="x" dir={1} label="X+" />
-              <div /><JogBtn axis="y" dir={-1} label="Y−" /><div />
-            </div>
+            <div className={styles.jogArea}>
+              <div className={styles.jogGroup}>
+                <span className={styles.jogLabel}>X / Y</span>
+                <div className={styles.dpad}>
+                  <div /><JogBtn axis="y" dir={1} label="Y+" /><div />
+                  <JogBtn axis="x" dir={-1} label="X−" />
+                  <div className={styles.dpadCenter} />
+                  <JogBtn axis="x" dir={1} label="X+" />
+                  <div /><JogBtn axis="y" dir={-1} label="Y−" /><div />
+                </div>
+              </div>
 
-            <span className={styles.jogLabel}>Z</span>
-            <div className={styles.zRow}>
-              <JogBtn axis="z" dir={1} label="Z+" />
-              <JogBtn axis="z" dir={-1} label="Z−" />
+              <div className={styles.jogGroup}>
+                <span className={styles.jogLabel}>Z</span>
+                <div className={styles.zCol}>
+                  <JogBtn axis="z" dir={1} label="Z+" />
+                  <JogBtn axis="z" dir={-1} label="Z−" />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -124,11 +135,21 @@ export default function AdminTab({ estopOnly }) {
       {!estopOnly && (
         <div className={styles.card}>
           <div className={styles.cardTitle}>
-            로봇 상태 (User 102 좌표계)
+            로봇 상태 ({frameLabel} 좌표계)
+            <div className={styles.frameToggle}>
+              <button
+                className={`${styles.frameBtn} ${!isBase ? styles.frameBtnActive : ''}`}
+                onClick={() => setFrame('user102')}
+              >User 102</button>
+              <button
+                className={`${styles.frameBtn} ${isBase ? styles.frameBtnActive : ''}`}
+                onClick={() => setFrame('base')}
+              >BASE</button>
+            </div>
             <span className={`${styles.wsDot} ${connected ? styles.wsOn : ''}`} />
           </div>
           <div className={styles.coordGrid}>
-            {robot.tcp_position.map((v, i) => (
+            {pos.map((v, i) => (
               <div key={i} className={styles.coordCell}>
                 <span className={styles.coordAxis}>{AXIS_LABELS[i]}</span>
                 <span className={styles.coordVal}>
@@ -139,13 +160,13 @@ export default function AdminTab({ estopOnly }) {
             ))}
           </div>
 
-          <div className={styles.coordSubTitle}>TCP 외력 (User 102)</div>
+          <div className={styles.coordSubTitle}>TCP 외력 ({frameLabel})</div>
           <div className={styles.coordGrid}>
             {FORCE_LABELS.map((label, i) => (
               <div key={label} className={styles.coordCell}>
                 <span className={styles.coordAxis}>{label}</span>
                 <span className={styles.coordVal}>
-                  {connected ? (robot.tcp_force?.[i] ?? 0).toFixed(2) : '—'}
+                  {connected ? (forceArr?.[i] ?? 0).toFixed(2) : '—'}
                   <span className={styles.coordUnit}>{FORCE_UNIT}</span>
                 </span>
               </div>

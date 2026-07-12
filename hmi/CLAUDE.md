@@ -140,19 +140,34 @@ const { robot, connected } = useRobotState()
 
 ## 설치 및 실행
 
+HMI 화면을 띄우는 방법은 **두 가지**다. 배포/시연은 (A), 화면 개발 중에는 (B)를 쓴다.
+
+### (A) 배포·시연 — 빌드 후 FastAPI(8000)가 서빙  ← 기본
+
 ```bash
 cd hmi/
 npm install
-
-# 로컬
-npm run dev
-
-# 팀원 접속 (같은 네트워크)
-npm run dev -- --host
+npm run build          # → hmi/dist/ 생성
 ```
 
-기본 포트: `http://localhost:5173`
-팀원 접속: `http://172.23.0.201:5173`  (WiFi 대역 IP. `ip -brief addr`의 `wlx...` 인터페이스 주소)
+빌드하면 FastAPI 서버(`../server`, 8000)가 `hmi/dist/` 를 루트 `/` 에서 서빙한다
+(`server/app/main.py` 의 `StaticFiles` 마운트). **HMI용 서버를 따로 띄울 필요 없이**
+`http://localhost:8000/` (팀원 `http://172.23.0.201:8000/`) 한 주소로 화면+API 를 쓴다.
+
+> 화면(`hmi/src`)을 고칠 때마다 `npm run build` 를 다시 돌려야 8000 에 반영된다.
+
+### (B) 화면 개발 중 — Vite 개발 서버(5173) 핫리로드
+
+```bash
+cd hmi/
+npm run dev            # http://localhost:5173
+npm run dev -- --host  # 팀원 접속(같은 네트워크): http://172.23.0.201:5173
+```
+
+Vite 개발 서버는 화면만 띄우고, API 호출은 여전히 8000(FastAPI)을 쓴다
+(`client.js` 의 `BASE_URL` 이 접속 host:8000 을 자동으로 가리킴). 코드를 고치면
+즉시 반영(핫리로드)돼서 UI 작업이 빠르다. 이땐 5173/8000 두 서버가 함께 뜬다.
+(WiFi 대역 IP 는 `ip -brief addr` 의 `wlx...` 인터페이스 주소)
 
 ---
 
@@ -167,11 +182,14 @@ ros-bringup_real_mode
 # 2. ROS2 통신 노드
 python3 server/pub_sub.py
 
-# 3. FastAPI 서버
+# 3. FastAPI 서버 (화면도 여기서 서빙 — hmi/dist)
 uvicorn app.main:app --host 0.0.0.0 --port 8000   # server/ 에서
+#   → 사전에 hmi/ 에서 `npm run build` 로 dist/ 를 만들어 둘 것
 
-# 4. HMI
-npm run dev   # hmi/ 에서
+# (개발 중 화면 핫리로드가 필요할 때만) 4. Vite 개발 서버
+npm run dev   # hmi/ 에서 (5173). API 는 계속 8000 을 씀
 ```
 
-> UI만 확인하려면 4번만 실행해도 되지만, API 호출은 실패하고 캔버스는 빈 상태로 표시됩니다.
+> 배포/시연은 3번까지면 `http://<서버>:8000/` 에서 화면+API 가 모두 뜬다(4번 불필요).
+> 4번(Vite 5173)은 화면 코드를 자주 고치는 개발 중에만 추가로 띄운다.
+> 3번 없이 화면만 보면 API 호출은 실패하고 캔버스는 빈 상태로 표시된다.

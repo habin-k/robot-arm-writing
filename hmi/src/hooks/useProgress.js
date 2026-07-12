@@ -10,6 +10,8 @@ export const useProgress = () => {
     current_char: '',
     error_msg: '',
     job_id: null,
+    elapsed_sec: 0,   // 서버 기준 작업 경과 초 (클라이언트가 매초 로컬 틱)
+    running: false,   // 작업 진행 중 여부 (타이머 진행/정지 판단)
   })
   const [connected, setConnected] = useState(false)
   const wsRef = useRef(null)

@@ -1,4 +1,5 @@
 import sys
+import time
 import uuid
 from typing import List
 from fastapi import APIRouter, HTTPException
@@ -7,23 +8,37 @@ from ..models.writing import (
     WritingHistoryItem, HistoryDeleteRequest,
 )
 from ..core.robot_state import job_state
-from ..core import history
+from ..core import history, tuning_config
 
 # path_generator.py import (같은 저장소)
 sys.path.append("/home/dongmin/ws_cobot_pjt/ws_dsr/src/cobot_writing")
+import cobot_writing.path_generator as pgmod
 from cobot_writing.path_generator import PathGenerator
 
 router = APIRouter(prefix="/writing", tags=["글씨 쓰기"])
 
 
-@router.post("/preview", response_model=PreviewResponse, summary="미리보기 경로 생성")
-def preview(req: WritingRequest):
-    gen = PathGenerator(
+def _make_generator(req):
+    """요청값(폰트·크기·여백·fill) + 관리자 경로 파라미터(줄/글자 간격·도화지·해칭·곡선)로
+    PathGenerator 를 만든다. 관리자 값은 tuning_config 에서 읽어 실시간 반영된다."""
+    cfg = tuning_config.get_path()
+    pgmod._CURVE_STEPS = int(cfg["curve_steps"])   # 모듈 전역(곡선 분해 세밀도) 반영
+    return PathGenerator(
         font_name=req.font_name,
         char_height_mm=req.char_height_mm,
         margin_mm=req.margin_mm,
         fill_mode=req.fill_mode,
+        line_spacing_factor=cfg["line_spacing_factor"],
+        char_spacing_mm=cfg["char_spacing_mm"],
+        paper_width_mm=cfg["paper_width_mm"],
+        paper_height_mm=cfg["paper_height_mm"],
+        hatch_spacing_mm=cfg["hatch_spacing_mm"],
     )
+
+
+@router.post("/preview", response_model=PreviewResponse, summary="미리보기 경로 생성")
+def preview(req: WritingRequest):
+    gen = _make_generator(req)
     path = gen.generate(req.text)
     waypoints = [[x, y, int(pd)] for x, y, pd in path]
     return PreviewResponse(
@@ -53,14 +68,12 @@ def execute(req: WritingRequest):
     job_state.current_stroke = 0
     job_state.current_char = ""
     job_state.error_msg = ""
+    # 작업 경과 타이머 시작 (finished_at=0 = 진행 중)
+    job_state.started_at = time.time()
+    job_state.finished_at = 0.0
 
     # 경로 생성 후 ROS2 토픽 발행
-    gen = PathGenerator(
-        font_name=req.font_name,
-        char_height_mm=req.char_height_mm,
-        margin_mm=req.margin_mm,
-        fill_mode=req.fill_mode,
-    )
+    gen = _make_generator(req)
     path = gen.generate(req.text)
     job_state.total_strokes = sum(
         1 for i, p in enumerate(path) if p[2] and (i == 0 or not path[i-1][2])
@@ -72,6 +85,8 @@ def execute(req: WritingRequest):
     node = get_ros_node()
     if node is None:
         raise HTTPException(status_code=503, detail="ROS2 노드가 준비되지 않았습니다.")
+    # 펜 선택을 먼저 발행하고(웨이포인트 수신=작업 시작이므로 순서 중요) 웨이포인트를 발행한다.
+    node.publish_pen(req.pen)
     node.publish_waypoints(path)
 
     # UI가 즉시 '쓰는 중/취소' 상태로 바뀌도록 진행률 브로드캐스트
@@ -97,6 +112,8 @@ def cancel():
     if job_state.status != "writing":
         raise HTTPException(status_code=400, detail="진행 중인 작업이 없습니다.")
     job_state.status = "cancelled"
+    if job_state.started_at > 0 and job_state.finished_at == 0.0:
+        job_state.finished_at = time.time()   # 타이머 정지
     from ..core.ros_node import get_ros_node
     node = get_ros_node()
     if node:
@@ -120,6 +137,7 @@ def delete_history(req: HistoryDeleteRequest):
 
 @router.get("/status", response_model=WritingStatus, summary="현재 작업 상태 조회")
 def get_status():
+    from ..core.robot_state import job_elapsed_sec
     return WritingStatus(
         job_id=job_state.job_id,
         status=job_state.status,
@@ -128,4 +146,6 @@ def get_status():
         total_strokes=job_state.total_strokes,
         current_char=job_state.current_char,
         error_msg=job_state.error_msg,
+        elapsed_sec=job_elapsed_sec(),
+        running=job_state.started_at > 0 and job_state.finished_at == 0.0,
     )

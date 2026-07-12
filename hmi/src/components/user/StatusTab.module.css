@@ -183,3 +183,8 @@
   color: var(--ink);
   font-weight: 500;
 }
+
+/* ── 모바일 반응형 (≤768px): 2단 카드 → 1단 세로 스택 ── */
+@media (max-width: 768px) {
+  .layout { grid-template-columns: 1fr; }
+}

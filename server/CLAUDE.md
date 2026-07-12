@@ -40,7 +40,7 @@ server/
 ├── requirements.txt
 ├── pub_sub.py               ← ROS2 구독/발행 노드 (로봇 직접 제어, init_dsr() 패턴)
 └── app/
-    ├── main.py              ← FastAPI 앱 진입점, Swagger 자동 생성, ROS2 노드 시작
+    ├── main.py              ← FastAPI 앱 진입점, Swagger·ROS2 노드 시작, hmi/dist 정적 서빙(/)
     ├── core/
     │   ├── config.py        ← 관리자 계정, JWT 설정
     │   ├── auth.py          ← JWT 인증 로직
@@ -82,8 +82,21 @@ cd /home/dongmin/ws_cobot_pjt/ws_dsr/src/cobot_writing/server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-실행 후 Swagger: `http://localhost:8000/docs`
-팀원 접속: `http://172.23.0.201:8000/docs`  (같은 WiFi에 접속한 팀원)
+실행 후:
+- HMI 화면: `http://localhost:8000/` (팀원: `http://172.23.0.201:8000/`)
+- Swagger: `http://localhost:8000/docs`
+
+> **HMI 화면도 이 서버(8000)가 서빙한다.** `main.py` 가 `hmi/dist/`(React 빌드물)를
+> 루트 `/` 에 `StaticFiles` 로 마운트하므로, uvicorn 하나로 화면+API 를 모두 제공한다.
+> (예전엔 Vite 개발 서버(5173)가 화면을 따로 띄웠음 → 이제 별도 서버 불필요.)
+> - **화면(`hmi/src`) 을 수정하면** `hmi/` 에서 `npm run build` 를 다시 돌려 `dist/` 를
+>   갱신해야 8000 에 반영된다.
+> - 화면을 자주 고치는 **개발 중에는** 예전처럼 `hmi/` 에서 `npm run dev`(5173)로 핫리로드
+>   하는 게 편하다. 그때도 API 호출은 8000 을 그대로 쓴다(`client.js` BASE_URL).
+> - `dist/` 가 없으면(빌드 전) API 만 뜨고 `/` 접속 시 "not built" 안내가 나온다.
+>   헬스체크 엔드포인트는 `GET /health`.
+
+팀원 접속: `http://172.23.0.201:8000/`  (같은 WiFi에 접속한 팀원)
 
 > **접속 IP 주의**
 > `hostname -I`에 여러 IP가 뜨는데, 팀원 공유용은 **WiFi 대역(예: `172.23.0.201`)**입니다.
@@ -241,6 +254,13 @@ rx, ry, rz = 90.0, 180.0, 90.0      # TCP 자세 고정
 ---
 
 ## API 전체 목록
+
+### 기타
+| Method | Endpoint | 인증 필요 | 설명 |
+|---|---|---|---|
+| GET | `/` | X | HMI 화면(`hmi/dist` 정적 서빙). dist 없으면 "not built" 안내 |
+| GET | `/health` | X | 헬스체크 `{"status":"ok"}` (예전 `GET /` 자리) |
+| GET | `/docs` | X | Swagger UI |
 
 ### 인증
 | Method | Endpoint | 인증 필요 | 설명 |

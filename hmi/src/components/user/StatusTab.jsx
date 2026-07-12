@@ -1,20 +1,52 @@
+import { useEffect, useRef, useState } from 'react'
 import { useProgress } from '../../hooks/useProgress'
 import styles from './StatusTab.module.css'
 
+// 경과 시간(초) → "mm:ss" (1시간 넘으면 "h:mm:ss")
+const fmtElapsed = (s) => {
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const ss = s % 60
+  const pad = (n) => String(n).padStart(2, '0')
+  return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${pad(m)}:${pad(ss)}`
+}
+
+// 서버가 준 elapsed_sec 를 기준으로, 진행 중이면 매초 로컬로 이어서 증가시킨다.
+// (WebSocket 은 상태 변화 때만 push 되므로, 그 사이 초는 클라이언트가 채운다)
+// 서버 base 가 갱신될 때마다 재동기화해서 시계 오차가 누적되지 않게 한다.
+const useLiveElapsed = (progress) => {
+  const base = progress.elapsed_sec || 0
+  const running = !!progress.running
+  const sync = useRef({ base: 0, at: Date.now() })
+  const [, force] = useState(0)
+  useEffect(() => {
+    sync.current = { base, at: Date.now() }   // 서버 값 도착 시 기준 재동기화
+    force((n) => n + 1)
+  }, [base, running, progress.job_id])
+  useEffect(() => {
+    if (!running) return
+    const id = setInterval(() => force((n) => n + 1), 1000)
+    return () => clearInterval(id)
+  }, [running])
+  const extra = running ? Math.floor((Date.now() - sync.current.at) / 1000) : 0
+  return sync.current.base + extra
+}
+
 const STATUS_LABEL = {
   idle: '대기 중', writing: '쓰는 중', done: '완료',
-  error: '오류', cancelled: '취소됨',
+  error: '오류', cancelled: '취소됨', manual_required: '수동 복구 필요',
 }
 // 토큰 팔레트와 일치 (--ink-faint / --ok / --info / --danger)
 const STATUS_COLOR = {
   idle: '#9297a0', writing: '#1f9d57', done: '#2f6bd8',
-  error: '#d64530', cancelled: '#9297a0',
+  error: '#d64530', cancelled: '#9297a0', manual_required: '#d64530',
 }
 
 export default function StatusTab() {
   const { progress, connected } = useProgress()
   const color = STATUS_COLOR[progress.status] || '#9297a0'
   const isWriting = progress.status === 'writing'
+  const elapsed = useLiveElapsed(progress)
 
   return (
     <div className={styles.layout}>
@@ -30,6 +62,21 @@ export default function StatusTab() {
         </div>
         {progress.job_id && (
           <div className={styles.jobId}>Job #{progress.job_id}</div>
+        )}
+        {(progress.running || elapsed > 0) && (
+          <div style={{
+            marginTop: 14, display: 'flex', alignItems: 'baseline', gap: 8,
+          }}>
+            <span style={{ fontSize: 13, color: 'var(--ink-faint)' }}>
+              {progress.running ? '경과 시간' : '작업 소요 시간'}
+            </span>
+            <span style={{
+              fontSize: 28, fontWeight: 600, fontVariantNumeric: 'tabular-nums',
+              letterSpacing: 1, color,
+            }}>
+              {fmtElapsed(elapsed)}
+            </span>
+          </div>
         )}
       </div>
 

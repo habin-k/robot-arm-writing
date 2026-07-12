@@ -31,6 +31,15 @@ def error_reset():
     return {"message": "에러 리셋 명령 전송"}
 
 
+@router.post("/retry", summary="작업 재시도 (수동 복구 후)")
+def retry_task():
+    # 수동 복구 모드(MANUAL_REQUIRED)에서만 성공. 그 외 상태면 task_manager 가 거절 메시지를 준다.
+    success, message = _node().call_retry()
+    if not success:
+        raise HTTPException(status_code=409, detail=message)
+    return {"message": message}
+
+
 @router.post("/grip", summary="그리퍼 집기")
 def grip():
     _node().publish_grip(True)

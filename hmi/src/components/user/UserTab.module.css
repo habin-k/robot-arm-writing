@@ -263,17 +263,17 @@
 }
 
 .canvasBox {
-  flex: 1;
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(23, 25, 28, 0.06);
-  /* A4 landscape 비율 유지, 부모 높이에 맞춤 (상단 정보 카드 높이만큼 여유를 뺌) */
+  /* A4 landscape 비율(가로 295.57 > 세로 209.72). aspect-ratio 가 높이를 결정하도록
+     flex:1 로 세로를 늘리지 않는다. max-width 로 뷰포트 높이를 넘지 않게만 제한. */
+  width: 100%;
   max-width: calc((100vh - 250px) * 295.57 / 209.72);
   aspect-ratio: 295.57 / 209.72;
   align-self: flex-start;
-  width: 100%;
 }
 
 .summaryRow {
@@ -283,4 +283,13 @@
   color: var(--ink-faint);
   flex-wrap: wrap;
   flex-shrink: 0;
+}
+
+/* ── 모바일 반응형 (≤768px): 입력 패널/미리보기 2단 → 1단 세로 스택 ── */
+@media (max-width: 768px) {
+  .layout { grid-template-columns: 1fr; overflow: visible; gap: 16px; }
+  .panel { overflow: visible; padding-right: 0; }
+  .canvasArea { overflow: visible; }
+  .canvasBox { max-width: none; }   /* 뷰포트 높이 기준 제한 해제 → 컬럼 폭에 맞춤 */
+  .actions { flex-wrap: wrap; }
 }

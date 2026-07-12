@@ -89,12 +89,19 @@
 .stepBtn:hover { border-color: var(--ink-soft); color: var(--ink); }
 .stepBtnActive { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 
+/* X/Y 십자패드 + Z 열을 한 줄에 나란히 배치 */
+.jogArea {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.jogGroup { display: flex; flex-direction: column; }
+
 .dpad {
   display: grid;
   grid-template-columns: repeat(3, 52px);
   grid-template-rows: repeat(3, 52px);
-  gap: 4px;
-  margin-bottom: 12px;
+  gap: 6px;
 }
 
 .dpadBtn {
@@ -112,8 +119,14 @@
 
 .dpadCenter { border-radius: 50%; background: var(--line); }
 
-.zRow { display: flex; gap: 4px; }
-.zRow .dpadBtn { width: 52px; height: 52px; }
+/* Z 축: X/Y 패드와 같은 높이(168px)를 채우는 세로 2버튼 */
+.zCol {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 168px;
+}
+.zCol .dpadBtn { width: 52px; flex: 1; }
 
 .jogLabel {
   font-size: 11px;
@@ -135,8 +148,9 @@
   margin-top: 8px;
 }
 
-.gripRow { display: flex; gap: 8px; }
-.gripRow .actionBtn { flex: 1; justify-content: center; }
+/* Grip/Ungrip 을 완전히 동일한 크기로 (margin-bottom 차이로 한쪽이 작아지던 것 수정) */
+.gripRow { display: flex; align-items: stretch; gap: 8px; }
+.gripRow .actionBtn { flex: 1 1 0; margin-bottom: 0; justify-content: center; }
 
 /* 로봇 상태 카드: WebSocket 연결 표시 점 */
 .cardTitle { display: flex; align-items: center; }
@@ -147,6 +161,31 @@
   margin-left: 8px;
 }
 .wsOn { background: var(--ok); }
+
+/* 좌표계 선택 토글 (User 102 / BASE) — 제목 우측에 붙는 세그먼트 버튼 */
+.frameToggle {
+  display: inline-flex;
+  margin-left: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--paper-sunk);
+}
+.frameBtn {
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.frameBtn:hover { color: var(--ink); }
+.frameBtnActive {
+  color: #fff;
+  background: var(--seal);
+}
 
 /* User_102 좌표/외력 그리드 (3열) */
 .coordGrid {
@@ -189,4 +228,9 @@
   font-weight: 400;
   color: var(--ink-faint);
   margin-left: 3px;
+}
+
+/* ── 모바일 반응형 (≤768px): 2단 카드 그리드 → 1단 세로 스택 ── */
+@media (max-width: 768px) {
+  .grid { grid-template-columns: 1fr; }
 }

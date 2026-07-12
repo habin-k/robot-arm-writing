@@ -2,34 +2,62 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import UserTab from './components/user/UserTab'
 import StatusTab from './components/user/StatusTab'
 import HistoryTab from './components/user/HistoryTab'
+import DashboardTab from './components/admin/DashboardTab'
 import AdminTab from './components/admin/AdminTab'
+import TuningTab from './components/admin/TuningTab'
 import LoginModal from './components/admin/LoginModal'
+import RecoveryModal from './components/admin/RecoveryModal'
+import { useProgress } from './hooks/useProgress'
+import { usePersistentState } from './hooks/usePersistentState'
 import { setAuthToken, getStoredToken } from './api/client'
 import './App.css'
 
 const NAV = [
-  { id: 'write',   label: '글씨 쓰기',  icon: '✏️',  admin: false },
-  { id: 'status',  label: '작업 상태',  icon: '📊',  admin: false },
-  { id: 'history', label: '이용 내역',  icon: '🕘',  admin: false },
-  { id: 'robot',   label: '로봇 제어',  icon: '🤖',  admin: true  },
+  { id: 'write',     label: '글씨 쓰기',  icon: '✏️',  admin: false },
+  { id: 'dashboard', label: '대시보드',   icon: '🖥️',  admin: true  },
+  { id: 'status',    label: '작업 상태',  icon: '📊',  admin: true  },
+  { id: 'history',   label: '이용 내역',  icon: '🕘',  admin: true  },
+  { id: 'robot',     label: '로봇 제어',  icon: '🤖',  admin: true  },
+  { id: 'tuning',    label: '파라미터 설정', icon: '⚙️', admin: true  },
 ]
 
 const PAGE_TITLE = {
-  write:   '글씨 쓰기',
-  status:  '작업 상태',
-  history: '이용 내역',
-  robot:   '로봇 제어',
+  write:     '글씨 쓰기',
+  dashboard: '대시보드',
+  status:    '작업 상태',
+  history:   '이용 내역',
+  robot:     '로봇 제어',
+  tuning:    '파라미터 설정',
 }
 
 const SIDEBAR_MIN = 160
 const SIDEBAR_MAX = 460
 
 export default function App() {
-  const [page, setPage] = useState('write')
+  // 현재 탭도 sessionStorage 에 보관 → 새로고침해도 보던 탭 유지 (창 닫으면 초기화)
+  const [page, setPage] = usePersistentState('page', 'write')
   // 새로고침 시에도 로그인 유지 (토큰은 sessionStorage 에 보관, 창을 닫으면 사라짐)
   const [token, setToken] = useState(() => getStoredToken())
+
+  // 복원된 탭이 관리자 전용인데 로그인이 안 돼 있으면 글씨쓰기로 폴백 (빈 화면 방지)
+  useEffect(() => {
+    const item = NAV.find(n => n.id === page)
+    if (item?.admin && !token) setPage('write')
+  }, [page, token, setPage])
   const [showLogin, setShowLogin] = useState(false)
   const [pendingPage, setPendingPage] = useState(null)
+
+  // 로봇 수동 복구 팝업: 비상정지 등으로 MANUAL_REQUIRED 진입 시, 관리자에게만 표시.
+  // (복구는 관리자 권한 작업이고 /robot/retry 도 관리자 전용이므로 로그인 상태에서만 띄운다.)
+  const { progress } = useProgress()
+  const [showRecovery, setShowRecovery] = useState(false)
+  useEffect(() => {
+    if (progress.status === 'manual_required') {
+      if (token) setShowRecovery(true)
+    } else {
+      setShowRecovery(false)   // 재시도/리셋으로 복구되면 자동으로 닫힘
+    }
+  }, [progress.status, token])
 
   // 사이드바 너비 (드래그로 조절, localStorage에 저장)
   const [sidebarW, setSidebarW] = useState(() => {
@@ -157,10 +185,12 @@ export default function App() {
           <h1 className="pageTitle">{PAGE_TITLE[page]}</h1>
         </div>
         <div className="pageContent">
-          {page === 'write'   && <UserTab />}
-          {page === 'status'  && <StatusTab />}
-          {page === 'history' && <HistoryTab />}
+          {page === 'write'     && <UserTab />}
+          {page === 'dashboard' && token && <DashboardTab />}
+          {page === 'status'    && token && <StatusTab />}
+          {page === 'history' && token && <HistoryTab />}
           {page === 'robot'   && token && <AdminTab />}
+          {page === 'tuning'  && token && <TuningTab />}
         </div>
       </main>
 
@@ -168,6 +198,13 @@ export default function App() {
         <LoginModal
           onLogin={handleLogin}
           onClose={() => { setShowLogin(false); setPendingPage(null) }}
+        />
+      )}
+
+      {showRecovery && token && (
+        <RecoveryModal
+          errorMsg={progress.error_msg}
+          onClose={() => setShowRecovery(false)}
         />
       )}
     </div>

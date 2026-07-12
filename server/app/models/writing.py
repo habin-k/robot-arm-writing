@@ -10,6 +10,7 @@ class WritingRequest(BaseModel):
     fill_mode: str = Field("outline", description="outline(윤곽선) 또는 hatch(속 채우기)", example="outline")
     skip_surface_detect: bool = Field(False)
     nickname: str = Field("", description="이용자 닉네임 (이용 내역 구분용)", example="길동")
+    pen: str = Field("red", description="붓펜 컬러 (red/purple/cyan)", example="red")
 
 
 class WritingHistoryItem(BaseModel):
@@ -47,3 +48,5 @@ class WritingStatus(BaseModel):
     total_strokes: int
     current_char: str
     error_msg: str
+    elapsed_sec: int = 0
+    running: bool = False

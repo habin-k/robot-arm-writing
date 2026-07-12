@@ -6,9 +6,12 @@ import { usePersistentState } from '../../hooks/usePersistentState'
 import PreviewCanvas from './PreviewCanvas'
 import styles from './UserTab.module.css'
 
-const STATUS_LABEL = {
-  idle: '대기 중', writing: '쓰는 중', done: '완료', error: '오류', cancelled: '취소됨',
-}
+// 붓펜 색상 (task_manager PENS 와 id 일치). 빨강=두꺼운 붓, 보라·청록=얇은 붓.
+const PENS = [
+  { id: 'red',    label: '빨강', color: '#d64530' },
+  { id: 'purple', label: '보라', color: '#7c3aed' },
+  { id: 'cyan',   label: '청록', color: '#0891b2' },
+]
 
 export default function UserTab() {
   // 입력값은 sessionStorage 에 저장 → 다른 탭에 갔다 와도, 새로고침해도 유지된다.
@@ -18,7 +21,7 @@ export default function UserTab() {
   const [size, setSize] = usePersistentState('write.size', 15)
   const [margin, setMargin] = usePersistentState('write.margin', 20)
   const [fillMode, setFillMode] = usePersistentState('write.fillMode', 'outline')
-  const [skipDetect, setSkipDetect] = usePersistentState('write.skipDetect', false)
+  const [pen, setPen] = usePersistentState('write.pen', 'red')
   const [waypoints, setWaypoints] = usePersistentState('write.waypoints', [])
   const [summary, setSummary] = usePersistentState('write.summary', null)
   const [fonts, setFonts] = useState([])
@@ -38,7 +41,7 @@ export default function UserTab() {
     try {
       const r = await previewWriting({
         text, font_name: font, char_height_mm: size,
-        margin_mm: margin, fill_mode: fillMode, skip_surface_detect: skipDetect
+        margin_mm: margin, fill_mode: fillMode, skip_surface_detect: false
       })
       setWaypoints(r.data.waypoints)
       setSummary(r.data.summary)
@@ -61,8 +64,8 @@ export default function UserTab() {
     try {
       await executeWriting({
         text, font_name: font, char_height_mm: size,
-        margin_mm: margin, fill_mode: fillMode, skip_surface_detect: skipDetect,
-        nickname: nickname.trim()
+        margin_mm: margin, fill_mode: fillMode, skip_surface_detect: false,
+        nickname: nickname.trim(), pen
       })
     } catch (e) { alert('실행 실패: ' + (e.response?.data?.detail || e.message)) }
   }
@@ -139,13 +142,24 @@ export default function UserTab() {
               ))}
             </div>
           </div>
-          <div className={styles.switchRow} style={{ marginTop: 12 }}>
-            <label className={styles.switchLabel}>표면 자동 감지</label>
-            <button
-              className={`${styles.switch} ${!skipDetect ? styles.switchOn : ''}`}
-              onClick={() => setSkipDetect(v => !v)}>
-              <span className={styles.switchKnob} />
-            </button>
+        </div>
+
+        <div className={styles.card}>
+          <div className={styles.field}>
+            <label className={styles.label}>붓펜 색상</label>
+            <div className={styles.toggleGroup}>
+              {PENS.map(p => (
+                <button key={p.id}
+                  className={`${styles.toggleBtn} ${pen === p.id ? styles.toggleBtnActive : ''}`}
+                  onClick={() => setPen(p.id)}>
+                  <span style={{
+                    display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
+                    background: p.color, marginRight: 6, verticalAlign: 'middle',
+                  }} />
+                  {p.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -161,9 +175,9 @@ export default function UserTab() {
         </div>
       </div>
 
-      {/* 오른쪽: 상태 + 캔버스 */}
+      {/* 오른쪽: 종이 감지 + 캔버스 */}
       <div className={styles.canvasArea}>
-        {/* 우측 상단: 종이 감지 · 작업 상태 */}
+        {/* 우측 상단: 종이 감지 */}
         <div className={styles.topInfo}>
           <div className={styles.infoCard}>
             <div className={styles.paperRow}>
@@ -180,30 +194,11 @@ export default function UserTab() {
               </span>
             </div>
           </div>
-
-          <div className={styles.infoCard}>
-            <div className={styles.progressHeader}>
-              <span className={`${styles.statusDot} ${styles['dot_' + progress.status]}`} />
-              <span className={styles.statusText}>{STATUS_LABEL[progress.status] || progress.status}</span>
-              {isWriting && <span className={styles.progressPct}>{progress.progress_pct}%</span>}
-            </div>
-            {isWriting && (
-              <>
-                <div className={styles.progressBar}>
-                  <div className={styles.progressFill} style={{ width: `${progress.progress_pct}%` }} />
-                </div>
-                <div className={styles.progressDetail}>
-                  획 {progress.current_stroke} / {progress.total_strokes}
-                  {progress.current_char && ` · "${progress.current_char}" 쓰는 중`}
-                </div>
-              </>
-            )}
-            {progress.error_msg && <div className={styles.errorMsg}>{progress.error_msg}</div>}
-          </div>
         </div>
 
         <div className={styles.canvasBox}>
-          <PreviewCanvas waypoints={waypoints} marginMm={margin} animateKey={previewKey} />
+          <PreviewCanvas waypoints={waypoints} marginMm={margin} animateKey={previewKey}
+            color={PENS.find(p => p.id === pen)?.color} />
         </div>
         {summary && (
           <div className={styles.summaryRow}>
