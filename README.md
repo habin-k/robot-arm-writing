@@ -10,26 +10,45 @@
 
 ```mermaid
 flowchart LR
-    User[사용자] --> HMI[React HMI]
-    HMI --> API[FastAPI Server]
-    API --> PathGen["Path Generator<br/>TTF/OTF -> Waypoints"]
-    API --> RosPub["ROS2 writing_publisher"]
-    RosPub --> TargetTopic["/robot/target_moving"]
-    RosPub --> ControlTopics["제어 토픽<br/>pen, tuning, estop, jog"]
+    User["사용자"]
 
-    Arduino["Arduino Paper Sensor"] --> SensorNode["paper_sensor_publisher"]
-    SensorNode --> PaperTopic["/paper_sensor"]
+    subgraph UI["HMI"]
+        HMI["React HMI"]
+    end
 
-    TargetTopic --> TaskManager[task_manager]
-    ControlTopics --> TaskManager
-    PaperTopic --> TaskManager
+    subgraph Server["Backend"]
+        API["FastAPI Server"]
+        PathGen["Path Generator<br/>TTF/OTF -> Waypoints"]
+        RosPub["writing_publisher"]
+    end
 
-    TaskManager --> DSR["Doosan ROS2/DSR API"]
-    DSR --> Robot["Doosan M0609"]
-    Robot --> Gripper["OnRobot RG2"]
+    subgraph ROS["ROS2 Control"]
+        TaskManager["task_manager"]
+        SensorNode["paper_sensor_publisher"]
+        Bringup["m0609_rg2_bringup"]
+    end
 
-    TaskManager --> StateTopics["상태/좌표/힘/진행률 토픽"]
-    StateTopics --> API
+    subgraph HW["Hardware"]
+        Arduino["Arduino<br/>Paper Sensor"]
+        Robot["Doosan M0609"]
+        Gripper["OnRobot RG2"]
+    end
+
+    User --> HMI
+    HMI --> API
+    API --> PathGen
+    PathGen --> RosPub
+    RosPub -->|"/robot/target_moving<br/>control topics"| TaskManager
+
+    Arduino --> SensorNode
+    SensorNode -->|"/paper_sensor"| TaskManager
+
+    TaskManager --> Bringup
+    Bringup --> Robot
+    Robot --> Gripper
+
+    TaskManager -->|"status, pose, force, progress"| RosPub
+    RosPub --> API
     API --> HMI
 ```
 
