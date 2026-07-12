@@ -9,29 +9,33 @@
 ### 1.1 전체 구성
 
 ```mermaid
-flowchart TB
+flowchart LR
     User["사용자"]
 
     subgraph UI["HMI"]
+        direction TB
         HMI["React HMI"]
     end
 
     subgraph Server["Backend"]
+        direction TB
         API["FastAPI Server"]
         PathGen["Path Generator<br/>TTF/OTF -> Waypoints"]
         RosPub["writing_publisher"]
     end
 
     subgraph ROS["ROS2 Control"]
+        direction TB
         TaskManager["task_manager"]
         SensorNode["paper_sensor_publisher"]
         Bringup["m0609_rg2_bringup"]
     end
 
     subgraph HW["Hardware"]
-        Arduino["Arduino<br/>Paper Sensor"]
+        direction TB
         Robot["Doosan M0609"]
         Gripper["OnRobot RG2"]
+        Arduino["Arduino<br/>Paper Sensor"]
     end
 
     User --> HMI
@@ -39,17 +43,15 @@ flowchart TB
     API --> PathGen
     PathGen --> RosPub
     RosPub -->|"작업 요청<br/>/robot/target_moving"| TaskManager
-
-    Arduino --> SensorNode
-    SensorNode -->|"종이 감지<br/>/paper_sensor"| TaskManager
-
     TaskManager --> Bringup
     Bringup --> Robot
     Robot --> Gripper
 
-    TaskManager -.->|"상태 피드백<br/>status, pose, force, progress"| RosPub
-    RosPub --> API
-    API --> HMI
+    Arduino --> SensorNode
+    SensorNode -->|"종이 감지<br/>/paper_sensor"| TaskManager
+
+    TaskManager -.->|"상태 피드백<br/>status, pose, force, progress"| API
+    API -.-> HMI
 
     classDef user fill:#fff7ed,stroke:#f97316,stroke-width:1px,color:#111827;
     classDef ui fill:#eff6ff,stroke:#2563eb,stroke-width:1px,color:#111827;
