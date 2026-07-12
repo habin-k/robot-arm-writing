@@ -81,7 +81,7 @@ class PaperEjector:
     def eject(self):
         """종이 배출 기본 모션 (블로킹). 좌표는 기존 단독 노드와 100% 동일."""
         self.log.info('paper eject basic motion start')
-        self.movej(self.posj(0, 0, 90, 0, 90, 0), vel=VEL, acc=ACC)
+        # self.movej(self.posj(0, 0, 90, 0, 90, 0), vel=VEL, acc=ACC)
         self.movel(self.posx(462, 60, 85, 90, 180, 0), vel=VEL, acc=ACC)
         self.movel(self.posx(462, -180, 85, 90, 180, 0), vel=VEL, acc=ACC)
         self.movel(self.posx(462, -160, 85, 90, 100, 0), vel=VEL, acc=ACC)

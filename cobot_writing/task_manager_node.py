@@ -11,6 +11,7 @@ ROS 콜백은 플래그 갱신 또는 명령 큐 입력만 담당하고, 실제 
 """
 
 from enum import Enum
+import json
 import queue
 import threading
 import time
@@ -18,6 +19,7 @@ import time
 import rclpy
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, DurabilityPolicy, HistoryPolicy
 import DR_init
 from dsr_msgs2.srv import Jog, MoveStop
 from onrobot_rg_msgs.msg import OnRobotRGInput
@@ -26,6 +28,7 @@ from std_srvs.srv import Trigger
 
 # 그리기 엔진 (pub_sub 힘제어 로직 분리본). 같은 패키지의 writer.py.
 from cobot_writing.writer import PenWriter
+# 종이 배출 모션 엔진 (paper_ejector_node.py 를 클래스화한 것). paper_grip() 에서 사용.
 
 DR_init.__dsr__id = "dsr01"
 DR_init.__dsr__model = "m0609"
@@ -51,8 +54,8 @@ DR_BASE_REF     = 0   # 조그 기준 좌표 = BASE
 #   펜 상단 접근 높이 z=197, 파지 높이 z=108.5는 grip_pen()/return_pen() 안에서 공통으로 사용한다.
 PENS = {
     'red':    {'x': 237.0,  'y': -28.0,   'contact_force': 2.4},
-    'purple': {'x': 235.69, 'y': -105.47, 'contact_force': 1.8},
-    'cyan':   {'x': 233.34, 'y': -191.10, 'contact_force': 1.8},
+    'purple': {'x': 236.04, 'y': -188.02, 'contact_force': 1.8},
+    'cyan':   {'x': 241.11, 'y': -105.35, 'contact_force': 1.8},
 }
 # 펜 선택 토픽을 받기 전의 기본값. 알 수 없는 펜 이름이 들어오면 이 기본 펜을 사용한다.
 DEFAULT_PEN = 'red'
@@ -139,6 +142,14 @@ class TaskStateNode(Node):
         self.selected_pen = DEFAULT_PEN
         self.create_subscription(String,            '/robot/pen',             self._on_pen,   10)
 
+        # HMI 관리자 파라미터 설정 (글씨/공이동 속도·힘·접촉힘). 콜백은 JSON 저장만 하고
+        # 실제 적용은 메인 스레드에서 한다. transient_local(latched) → 노드가 나중에 떠도
+        # 서버가 마지막으로 발행한 값을 자동 수신한다 (재시작해도 설정 유지).
+        self.pending_tuning = None
+        tuning_qos = QoSProfile(depth=1, history=HistoryPolicy.KEEP_LAST,
+                                durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.create_subscription(String,            '/robot/tuning',          self._on_tuning, tuning_qos)
+
     def paper_callback(self, msg):
         # 종이 유무만 저장한다. 시작 트리거는 HMI 시작 버튼(웨이포인트 수신)으로 옮김.
         # (종이 센서로 자동 시작하면 task_manager 켜자마자 로봇이 움직여버림)
@@ -214,6 +225,14 @@ class TaskStateNode(Node):
             # 잘못된 좌표로 이동하지 않도록 기존 selected_pen 을 유지한다.
             self.get_logger().warn(f"알 수 없는 펜: {pen} (무시)")
 
+    def _on_tuning(self, msg):
+        # HMI 관리자 파라미터 설정 → JSON 파싱해서 저장만. 실제 적용은 메인 루프에서.
+        try:
+            self.pending_tuning = json.loads(msg.data)
+            self.get_logger().info(f"모션 파라미터 수신: {self.pending_tuning}")
+        except Exception as e:
+            self.get_logger().warn(f"모션 파라미터 파싱 실패: {e}")
+
     def _on_jog(self, msg):
         # 연속 조그: [axis_idx(0~5), speed_signed]. speed!=0 이동 시작, 0 정지.
         if len(msg.data) < 2:
@@ -287,32 +306,24 @@ class TaskManager:
         # 펜/도장 공통 그리퍼 닫기 함수.
         # 디지털 출력 1번을 ON 하면 OnRobot 그리퍼가 닫히는 배선/컨트롤러 설정을 전제로 한다.
         self.node.get_logger().info("그리퍼 닫기")
-        # 닫기 명령 전, 직전에 들어온 오래된 gripper_width 콜백이 반영될 시간을 준다.
         self.drain_gripper_callbacks(0.2)
         before_seq = self.node.gripper_width_seq
-        # 1/2번 출력을 모두 OFF 해서 이전 열기/닫기 명령 상태를 초기화한다.
         self.set_digital_output(1, 0)
         self.set_digital_output(2, 0)
-        # 1번 출력 ON: 그리퍼 닫기.
         self.set_digital_output(1, 1)
         self.wait(1)
-        # 닫기 이후 새 폭 피드백이 들어와야 is_gripped()가 실제 파지 결과를 판정할 수 있다.
         self.wait_for_gripper_update(before_seq)
 
     def ungrip(self):
         # 펜/도장 공통 그리퍼 열기 함수.
         # 펜 집기 재시도 전이나 펜 반납 위치에서 호출된다.
         self.node.get_logger().info("그리퍼 열기")
-        # 열기 명령 전, 직전에 들어온 오래된 gripper_width 콜백이 반영될 시간을 준다.
         self.drain_gripper_callbacks(0.2)
         before_seq = self.node.gripper_width_seq
-        # 1/2번 출력을 모두 OFF 해서 이전 열기/닫기 명령 상태를 초기화한다.
         self.set_digital_output(1, 0)
         self.set_digital_output(2, 0)
-        # 2번 출력 ON: 그리퍼 열기.
         self.set_digital_output(2, 1)
         self.wait(1)
-        # 열기 이후 새 폭 피드백을 기다려 다음 파지 판정이 오래된 값으로 되지 않게 한다.
         self.wait_for_gripper_update(before_seq)
 
     def drain_gripper_callbacks(self, duration_sec=0.2):
@@ -471,7 +482,7 @@ class TaskManager:
         self.node.get_logger().info("종이 배출 테스트 시작")
         self.movel(self.posx(0, 0, 120, 0, 0, 0), vel=VEL, acc=ACC, mod=self.DR_MV_MOD_REL, ref=self.DR_BASE)
         self.movel(self.posx(462, 80, 120, 90, 180, 90), vel=VEL, acc=ACC)
-        self.movel(self.posx(462, 80, 63, 90, 180, 90), vel=VEL, acc=ACC)
+        self.movel(self.posx(462, 80, 62, 90, 180, 90), vel=VEL, acc=ACC)
         self.wait(0.5)
         self.task_compliance_ctrl([2000, 2000, 2000, 200, 200, 200])
         self.wait(1)
@@ -504,9 +515,9 @@ class TaskManager:
     def paper_ready(self):
         """종이 센서(/paper_sensor)가 '종이 있음'을 보고할 때만 참을 반환한다.
         미수신 또는 종이 없음이면 작업 불가이고, require_paper=False이면 테스트용으로 항상 통과한다."""
-        if not self.node.require_paper:
+        if self.node.paper_present:
             return True
-        return self.node.paper_present is True
+        return False
 
     def go_home(self):
         self.node.get_logger().info("원점으로 이동중")
@@ -534,6 +545,11 @@ class TaskManager:
         except Exception as e:
             self.node.get_logger().error(f"MANUAL 모드 전환 실패: {e}")
 
+        # HMI 수동 복구 팝업 트리거용 상태 발행 (서버 STATUS_MAP 이 manual_required 로 매핑).
+        try:
+            self.writer.publish_status("MANUAL_REQUIRED")
+        except Exception as e:
+            self.node.get_logger().warn(f"MANUAL_REQUIRED 상태 발행 실패: {e}")
         self.node.robot_state = RobotState.MANUAL_REQUIRED
 
     def enter_autonomous_mode(self):
@@ -550,6 +566,7 @@ class TaskManager:
     def handle_command(self, cmd, data=None):
         """TaskStateNode 콜백이 큐에 넣은 수동 제어 명령을 메인 스레드에서 실행한다.
         (grip/ungrip=그리퍼, home=원점, reset=에러리셋)"""
+        self.state['busy'] = True
         try:
             if cmd == 'grip':
                 self.grip()
@@ -562,6 +579,26 @@ class TaskManager:
                 self.do_reset()
         except Exception as e:
             self.node.get_logger().error(f"수동 명령 '{cmd}' 실행 실패: {e}")
+        finally:
+            self.state['busy'] = False
+
+    def apply_tuning(self, params):
+        """HMI 관리자 파라미터 설정 반영: 모션 파라미터(writer) + 펜별 접촉힘(PENS).
+        메인 스레드에서만 호출된다 (DSR 호출 없이 인스턴스 변수만 교체)."""
+        # 글씨/공이동 속도·가속, 붓 누르는 힘, 힘제어 높이 → writer 인스턴스 변수
+        self.writer.apply_tuning(params)
+        # 펜별 접촉 판단 힘 → PENS 갱신 (다음 run_once 의 set_contact_force 에 반영)
+        cf = params.get('contact_force')
+        if isinstance(cf, dict):
+            for pen, val in cf.items():
+                if pen in PENS:
+                    try:
+                        PENS[pen]['contact_force'] = float(val)
+                    except (TypeError, ValueError):
+                        self.node.get_logger().warn(f"접촉힘 값 무시: {pen}={val}")
+            self.node.get_logger().info(
+                f"펜별 접촉힘 갱신: " +
+                ", ".join(f"{p}={PENS[p]['contact_force']}" for p in PENS))
 
     def do_reset(self):
         """에러 리셋: 자율 모드 복귀 + 비상정지 플래그 해제 + IDLE 로 복귀."""
@@ -633,7 +670,7 @@ def main(args=None):
 
     # 콜백(구독 노드)↔메인 스레드(모션) 공유 채널
     cmd_queue = queue.Queue()
-    state = {'emergency': False}
+    state = {'emergency': False, 'busy': False}
 
     # 1) DSR 전용 노드 — DSR 모션 함수가 내부적으로만 spin 한다 (우리가 spin 하지 않음).
     dsr_node = rclpy.create_node('dsr_motion', namespace='dsr01')
@@ -659,6 +696,12 @@ def main(args=None):
 
     try:
         while rclpy.ok():
+            # 3-0) HMI 파라미터 설정 반영 (콜백이 저장한 값을 메인 스레드에서 적용 — DSR 호출 없음)
+            if node.pending_tuning is not None:
+                params = node.pending_tuning
+                node.pending_tuning = None
+                sequencer.apply_tuning(params)
+
             # 3-1) HMI 수동 제어 명령 우선 처리 (grip/ungrip/home/reset)
             try:
                 cmd, data = cmd_queue.get_nowait()

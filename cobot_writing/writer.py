@@ -221,6 +221,7 @@ class PenWriter:
         self.travel_vel   = list(TRAVEL_VEL)
         self.travel_acc   = list(TRAVEL_ACC)
         self.write_force_z = WRITE_FORCE_Z
+        self.force_on_z    = FORCE_ON_Z    # 위치제어 하강 목표 z & 순응+힘제어 켜는 높이
 
     # ── 발행 헬퍼 ──────────────────────────────────────────────────────────
 
@@ -363,15 +364,16 @@ class PenWriter:
         self.write_acc     = _vel2('write_acc',  self.write_acc)
         self.travel_vel    = _vel2('travel_vel', self.travel_vel)
         self.travel_acc    = _vel2('travel_acc', self.travel_acc)
-        if 'write_force_z' in params:
-            try:
-                self.write_force_z = float(params['write_force_z'])
-            except (TypeError, ValueError):
-                pass
+        for key in ('write_force_z', 'force_on_z'):
+            if key in params:
+                try:
+                    setattr(self, key, float(params[key]))
+                except (TypeError, ValueError):
+                    pass
         self.log.info(
             f"모션 파라미터 갱신: write_vel={self.write_vel} write_acc={self.write_acc} "
             f"travel_vel={self.travel_vel} travel_acc={self.travel_acc} "
-            f"write_force_z={self.write_force_z}")
+            f"write_force_z={self.write_force_z} force_on_z={self.force_on_z}")
 
     def _wait_for_contact(self):
         """
@@ -383,7 +385,7 @@ class PenWriter:
         접촉 확정 시점의 z(mm)를 반환한다.
         """
         hits = 0
-        contact_z = FORCE_ON_Z
+        contact_z = self.force_on_z
         while True:
             if self.state.get('emergency'):
                 self.log.warning("비상정지 — 접촉 대기 중단")
@@ -442,7 +444,7 @@ class PenWriter:
         if before is not None and before[0] is not None:
             self.log.info(f"     이동 전 실제  X={before[0][0]:.1f}  Y={before[0][1]:.1f}")
 
-        self.movel(self.posx(fx, fy, HOVER_Z,    frx, fry, frz), vel=self.travel_vel, acc=self.travel_acc)
+        self.movel(self.posx(fx, fy, self.force_on_z + HOVER_HEIGHT, frx, fry, frz), vel=self.travel_vel, acc=self.travel_acc)
         after = self.get_current_posx()
         if after is not None and after[0] is not None:
             self.log.info(f"     hover 이동 후 실제  X={after[0][0]:.1f}  Y={after[0][1]:.1f}")
@@ -452,7 +454,7 @@ class PenWriter:
         # 이후 획들은 그 z 로 곧장 위치제어 하강한다 (획마다 힘 감지 반복 제거 → 빠름).
         # 전제: User_102 의 XY 평면이 종이면과 평행 → 접촉 z 가 쓰기 영역 전체에서 일정하다.
         if self._contact_z is None:
-            self.movel(self.posx(fx, fy, FORCE_ON_Z, frx, fry, frz), vel=PROBE_VEL, acc=PROBE_ACC)
+            self.movel(self.posx(fx, fy, self.force_on_z, frx, fry, frz), vel=PROBE_VEL, acc=PROBE_ACC)
             self.wait(0.2)
             self._log_zf("힘제어 ON 직전")
             self._enable_write_force()
@@ -541,7 +543,7 @@ class PenWriter:
         res = self.get_current_posx()
         if res is not None and res[0] is not None:
             cx, cy, cz, crx, cry, crz = res[0][:6]
-            safe_z = max(cz, FORCE_ON_Z + SAFE_Z_CLEARANCE)  # 아래로는 안 내려감
+            safe_z = max(cz, self.force_on_z + SAFE_Z_CLEARANCE)  # 아래로는 안 내려감
             self.movel(self.posx(cx, cy, safe_z, crx, cry, crz),
                        vel=self.travel_vel, acc=self.travel_acc)
         self.movej(self.posj(*HOME_JOINT), vel=10, acc=10)
