@@ -12,23 +12,23 @@
 flowchart LR
     User[사용자] --> HMI[React HMI]
     HMI --> API[FastAPI Server]
-    API --> PathGen[Path Generator\nTTF/OTF -> Waypoints]
-    API --> RosPub[ROS2 writing_publisher]
-    RosPub --> TargetTopic[/robot/target_moving/]
-    RosPub --> ControlTopics[제어 토픽\npen, tuning, estop, jog]
+    API --> PathGen["Path Generator<br/>TTF/OTF -> Waypoints"]
+    API --> RosPub["ROS2 writing_publisher"]
+    RosPub --> TargetTopic["/robot/target_moving"]
+    RosPub --> ControlTopics["제어 토픽<br/>pen, tuning, estop, jog"]
 
-    Arduino[Arduino Paper Sensor] --> SensorNode[paper_sensor_publisher]
-    SensorNode --> PaperTopic[/paper_sensor/]
+    Arduino["Arduino Paper Sensor"] --> SensorNode["paper_sensor_publisher"]
+    SensorNode --> PaperTopic["/paper_sensor"]
 
     TargetTopic --> TaskManager[task_manager]
     ControlTopics --> TaskManager
     PaperTopic --> TaskManager
 
-    TaskManager --> DSR[Doosan ROS2/DSR API]
-    DSR --> Robot[Doosan M0609]
-    Robot --> Gripper[OnRobot RG2]
+    TaskManager --> DSR["Doosan ROS2/DSR API"]
+    DSR --> Robot["Doosan M0609"]
+    Robot --> Gripper["OnRobot RG2"]
 
-    TaskManager --> StateTopics[상태/좌표/힘/진행률 토픽]
+    TaskManager --> StateTopics["상태/좌표/힘/진행률 토픽"]
     StateTopics --> API
     API --> HMI
 ```
@@ -43,8 +43,8 @@ flowchart TD
     D --> E[ROS2 통합 launch 실행]
     E --> F[HMI에서 문장/폰트/펜 선택]
     F --> G[서버가 글씨 경로 생성]
-    G --> H[/robot/target_moving 발행]
-    H --> I{종이 감지됨?}
+    G --> H["/robot/target_moving 발행"]
+    H --> I{"종이 감지됨?"}
     I -- 아니오 --> J[NO_PAPER 상태 표시]
     I -- 예 --> K[펜 파지]
     K --> L[힘 제어 기반 필기]
