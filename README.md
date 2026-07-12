@@ -164,6 +164,42 @@ flowchart TD
 | `/dsr01/motion/move_stop` | `dsr_msgs2/MoveStop` | 비상정지 시 진행 중 모션 정지 |
 | `/dsr01/motion/jog` | `dsr_msgs2/Jog` | HMI 수동 조그 명령 전달 |
 
+#### OnRobot RG2 그리퍼 폭 피드백
+
+OnRobot RG2 드라이버의 기본 `/joint_states` 토픽은 그리퍼 관절 각도값 중심이므로, 펜/도장 파지 성공 여부를 직접 판단하기에는 부족합니다. 본 시스템에서는 드라이버가 `/OnRobotRGInput` 토픽을 함께 발행하도록 수정하고, `gwdf` 값을 이용해 실제 그리퍼 너비를 확인합니다.
+
+드라이버 수정 사항:
+
+```python
+self.input_pub = self.create_publisher(
+    OnRobotRGInput,
+    '/OnRobotRGInput',
+    10,
+    callback_group=self.reentrant,
+)
+```
+
+```python
+def statusToInputMsg(self, status) -> OnRobotRGInput:
+    msg = OnRobotRGInput()
+    msg.gfof = int(status['offset'] * 10)
+    msg.ggwd = int(status['relative_width'] * 10)
+    msg.gwdf = int(status['width'] * 10)
+    return msg
+```
+
+```python
+self.input_pub.publish(self.statusToInputMsg(self.status))
+```
+
+`gwdf`는 fingertip offset이 반영된 현재 손가락 사이 너비이며, 단위는 `1/10 mm`입니다. 따라서 `task_manager`에서는 다음과 같이 mm 단위로 변환합니다.
+
+```python
+gripper_width_mm = msg.gwdf / 10.0
+```
+
+이 값으로 펜 또는 도장을 제대로 잡았는지 판단하고, 파지 실패 시 재시도 또는 수동 복구 흐름으로 전환합니다.
+
 ---
 
 ## 2. 운영체제 환경
