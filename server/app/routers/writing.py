@@ -1,6 +1,7 @@
 import sys
 import time
 import uuid
+from pathlib import Path
 from typing import List
 from fastapi import APIRouter, HTTPException
 from ..models.writing import (
@@ -10,8 +11,9 @@ from ..models.writing import (
 from ..core.robot_state import job_state
 from ..core import history, tuning_config
 
-# path_generator.py import (같은 저장소)
-sys.path.append("/home/dongmin/ws_cobot_pjt/ws_dsr/src/cobot_writing")
+# path_generator.py import (같은 저장소). 저장소 루트를 sys.path 에 추가한다.
+# 이 파일: server/app/routers/writing.py → parents[3] = 저장소 루트(cobot_writing/)
+sys.path.append(str(Path(__file__).resolve().parents[3]))
 import cobot_writing.path_generator as pgmod
 from cobot_writing.path_generator import PathGenerator
 

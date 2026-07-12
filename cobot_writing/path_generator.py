@@ -19,16 +19,16 @@ PEN_UP   = False
 PEN_DOWN = True
 
 FONT_PATHS = {
-    'regular':      '/usr/share/fonts/truetype/Helvetica Extended Medium.ttf',
-    'bold':         '/usr/share/fonts/truetype/Helvetica Bold.ttf',
-    'light':        '/usr/share/fonts/truetype/Helvetica Light.ttf',
-    'condensed':    '/usr/share/fonts/truetype/Helvetica Condensed.ttf',
-    'extended':     '/usr/share/fonts/truetype/Helvetica Extended.ttf',
-    'brother':      '/usr/share/fonts/truetype/Brother Signature.otf',
-    'sansbold':     '/usr/share/fonts/truetype/GmarketSansBold.otf',
-    'sanslight':   '/usr/share/fonts/truetype/GmarketSansLight.otf',
-    'sansmedium':   '/usr/share/fonts/truetype/GmarketSansMedium.otf',
-    'griun_cherri': '/usr/share/fonts/truetype/Griun_Cherry1Spoon-Rg.ttf'
+    'regular':      '/home/dongmin/ws_cobot_pjt/ws_dsr/src/cobot_writing/fonts/Helvetica Extended Medium.ttf',
+    'bold':         '/home/dongmin/ws_cobot_pjt/ws_dsr/src/cobot_writing/fonts/Helvetica Bold.ttf',
+    'light':        '/home/dongmin/ws_cobot_pjt/ws_dsr/src/cobot_writing/fonts/Helvetica Light.ttf',
+    'condensed':    '/home/dongmin/ws_cobot_pjt/ws_dsr/src/cobot_writing/fonts/Helvetica Condensed.ttf',
+    'extended':     '/home/dongmin/ws_cobot_pjt/ws_dsr/src/cobot_writing/fonts/Helvetica Extended.ttf',
+    'brother':      '/home/dongmin/ws_cobot_pjt/ws_dsr/src/cobot_writing/fonts/Brother Signature.otf',
+    'sansbold':     '/home/dongmin/ws_cobot_pjt/ws_dsr/src/cobot_writing/fonts/GmarketSansBold.otf',
+    'sanslight':   '//home/dongmin/ws_cobot_pjt/ws_dsr/src/cobot_writing/fontsGmarketSansLight.otf',
+    'sansmedium':   '/home/dongmin/ws_cobot_pjt/ws_dsr/src/cobot_writing/fonts/GmarketSansMedium.otf',
+    'griun_cherri': '/home/dongmin/ws_cobot_pjt/ws_dsr/src/cobot_writing/fonts/Griun_Cherry1Spoon-Rg.ttf'
 }
 
 _CURVE_STEPS = 12
