@@ -109,60 +109,60 @@ flowchart TD
 
 #### 노드
 
-| 노드 | 실행 위치 | 역할 |
-| :--- | :--- | :--- |
-| `paper_sensor_publisher` | `hand_writing.launch.py` | Arduino 시리얼 값을 읽어 종이 감지 상태 발행 |
-| `writing_publisher` | FastAPI 서버 내부 | HMI/API 요청을 ROS2 토픽과 서비스 호출로 변환 |
-| `task_manager` | `hand_writing.launch.py` | 종이 확인, 펜/도장 파지, 필기, 배출 전체 시퀀스 수행 |
-| `dsr_motion` | `task_manager` 내부 | DSR 모션 함수 호출용 ROS2 노드 |
-| `m0609_rg2_bringup` 관련 노드 | `hand_writing.launch.py`에서 include | Doosan M0609 및 OnRobot RG2 bringup |
+| 노드 | 실행 위치 | 역할 | 비고 |
+| :--- | :--- | :--- | :--- |
+| `paper_sensor_publisher` | `hand_writing.launch.py` | Arduino 시리얼 값을 읽어 종이 감지 상태 발행 | 센서값은 작업 자동 시작이 아니라 시작 전 종이 유무 확인에 사용 |
+| `writing_publisher` | FastAPI 서버 내부 | HMI/API 요청을 ROS2 토픽과 서비스 호출로 변환 | FastAPI 시작 시 싱글톤 ROS2 노드로 생성 |
+| `task_manager` | `hand_writing.launch.py` | 종이 확인, 펜/도장 파지, 필기, 배출 전체 시퀀스 수행 | HMI의 웨이포인트 수신 후에만 자동 시퀀스 시작 |
+| `dsr_motion` | `task_manager` 내부 | DSR 모션 함수 호출용 ROS2 노드 | 직접 spin하지 않고 DSR API 호출용으로만 사용 |
+| `m0609_rg2_bringup` 관련 노드 | `hand_writing.launch.py`에서 include | Doosan M0609 및 OnRobot RG2 bringup | 로봇, 컨트롤러, OnRobot RG2 드라이버 실행 포함 |
 
 #### 서버가 발행하는 제어 토픽
 
-| 토픽 | 타입 | 역할 |
-| :--- | :--- | :--- |
-| `/robot/target_moving` | `std_msgs/Float32MultiArray` | 필기 웨이포인트 전달 |
-| `/robot/pen` | `std_msgs/String` | 사용할 펜 색상 선택 |
-| `/robot/tuning` | `std_msgs/String` | 관리자 모션/경로 파라미터 전달 |
-| `/safety/emergency_stop` | `std_msgs/Bool` | 비상정지 명령 |
-| `/robot/go_home` | `std_msgs/Bool` | 원점 복귀 명령 |
-| `/robot/error_reset` | `std_msgs/Bool` | 에러 리셋 명령 |
-| `/robot/jog` | `std_msgs/Float32MultiArray` | HMI 수동 조그 명령 |
-| `/robot/grip` | `std_msgs/Bool` | 그리퍼 수동 열기/닫기 명령 |
+| 토픽 | 타입 | 역할 | 비고 |
+| :--- | :--- | :--- | :--- |
+| `/robot/target_moving` | `std_msgs/Float32MultiArray` | 필기 웨이포인트 전달 | 데이터는 `[x, y, z, rx, ry, rz, pen_down]` 반복이며 작업 시작 트리거 |
+| `/robot/pen` | `std_msgs/String` | 사용할 펜 색상 선택 | `red`, `purple`, `cyan` 중 하나를 웨이포인트 발행 직전에 전송 |
+| `/robot/tuning` | `std_msgs/String` | 관리자 모션/경로 파라미터 전달 | JSON 문자열, transient_local QoS로 마지막 설정 유지 |
+| `/safety/emergency_stop` | `std_msgs/Bool` | 비상정지 명령 | `true` 수신 시 `move_stop` 서비스 호출 후 수동 복구 모드 진입 |
+| `/robot/go_home` | `std_msgs/Bool` | 원점 복귀 명령 | `true` 수신 시 명령 큐를 통해 메인 모션 스레드에서 실행 |
+| `/robot/error_reset` | `std_msgs/Bool` | 에러 리셋 명령 | 수동 복구 후 AUTONOMOUS 모드 복귀와 상태 초기화에 사용 |
+| `/robot/jog` | `std_msgs/Float32MultiArray` | HMI 수동 조그 명령 | `[axis_idx, speed_signed]`, 속도 0이면 조그 정지 |
+| `/robot/grip` | `std_msgs/Bool` | 그리퍼 수동 열기/닫기 명령 | `true`=닫기, `false`=열기 |
 
 #### task_manager가 구독하는 입력 토픽
 
-| 토픽 | 타입 | 역할 |
-| :--- | :--- | :--- |
-| `/paper_sensor` | `std_msgs/Bool` | 종이 감지 상태 |
-| `/robot/target_moving` | `std_msgs/Float32MultiArray` | 작업 시작 트리거 및 웨이포인트 |
-| `/robot/pen` | `std_msgs/String` | 작업에 사용할 펜 선택 |
-| `/robot/tuning` | `std_msgs/String` | 속도, 힘, 접촉 판단값 등 튜닝값 |
-| `/safety/emergency_stop` | `std_msgs/Bool` | 작업 중단 요청 |
-| `/robot/go_home` | `std_msgs/Bool` | 원점 복귀 요청 |
-| `/robot/error_reset` | `std_msgs/Bool` | 수동 복구 후 에러 리셋 |
-| `/robot/jog` | `std_msgs/Float32MultiArray` | 수동 조그 요청 |
-| `/robot/grip` | `std_msgs/Bool` | 수동 그리퍼 제어 |
-| `/OnRobotRGInput` | `onrobot_rg_msgs/OnRobotRGInput` | 그리퍼 폭 피드백 및 파지 성공 판단 |
+| 토픽 | 타입 | 역할 | 비고 |
+| :--- | :--- | :--- | :--- |
+| `/paper_sensor` | `std_msgs/Bool` | 종이 감지 상태 | `False`이면 작업/재시도 시작을 거절하고 `NO_PAPER` 상태 발행 |
+| `/robot/target_moving` | `std_msgs/Float32MultiArray` | 작업 시작 트리거 및 웨이포인트 | 최신 웨이포인트를 저장해 재시도 시 동일 경로로 재실행 |
+| `/robot/pen` | `std_msgs/String` | 작업에 사용할 펜 선택 | 알 수 없는 펜 이름은 무시하고 기존 선택 유지 |
+| `/robot/tuning` | `std_msgs/String` | 속도, 힘, 접촉 판단값 등 튜닝값 | 콜백에서는 저장만 하고 메인 루프에서 적용 |
+| `/safety/emergency_stop` | `std_msgs/Bool` | 작업 중단 요청 | 진행 중 시퀀스와 writer 공유 emergency 플래그를 설정 |
+| `/robot/go_home` | `std_msgs/Bool` | 원점 복귀 요청 | 블로킹 DSR 모션은 콜백이 아닌 메인 스레드에서 실행 |
+| `/robot/error_reset` | `std_msgs/Bool` | 수동 복구 후 에러 리셋 | 로봇 모드를 AUTONOMOUS로 되돌린 뒤 `IDLE` 발행 |
+| `/robot/jog` | `std_msgs/Float32MultiArray` | 수동 조그 요청 | DSR `Jog` 서비스로 즉시 전달 |
+| `/robot/grip` | `std_msgs/Bool` | 수동 그리퍼 제어 | 명령 큐를 통해 grip/ungrip 수행 |
+| `/OnRobotRGInput` | `onrobot_rg_msgs/OnRobotRGInput` | 그리퍼 폭 피드백 및 파지 성공 판단 | `gwdf / 10.0`으로 mm 단위 폭을 계산 |
 
 #### 로봇 상태 피드백 토픽
 
-| 토픽 | 타입 | 역할 |
-| :--- | :--- | :--- |
-| `/robot/status` | `std_msgs/String` | `WRITING`, `IDLE`, `NO_PAPER`, `MANUAL_REQUIRED` 등 작업 상태 |
-| `/robot/current_pose` | `std_msgs/Float32MultiArray` | HMI 표시용 TCP 좌표 |
-| `/robot/current_pose_base` | `std_msgs/Float32MultiArray` | BASE 기준 TCP 좌표 |
-| `/robot/force` | `std_msgs/Float32MultiArray` | HMI 표시용 TCP 외력 |
-| `/robot/force_base` | `std_msgs/Float32MultiArray` | BASE 기준 TCP 외력 |
-| `/robot/progress` | `std_msgs/Float32MultiArray` | 필기 진행률 `[완료 획, 전체 획]` |
+| 토픽 | 타입 | 역할 | 비고 |
+| :--- | :--- | :--- | :--- |
+| `/robot/status` | `std_msgs/String` | `WRITING`, `IDLE`, `NO_PAPER`, `MANUAL_REQUIRED` 등 작업 상태 | 서버가 HMI 상태값으로 매핑하고 WebSocket으로 브로드캐스트 |
+| `/robot/current_pose` | `std_msgs/Float32MultiArray` | HMI 표시용 TCP 좌표 | User 102 기준 `[x, y, z, rx, ry, rz]` |
+| `/robot/current_pose_base` | `std_msgs/Float32MultiArray` | BASE 기준 TCP 좌표 | HMI 좌표계 선택 표시용 |
+| `/robot/force` | `std_msgs/Float32MultiArray` | HMI 표시용 TCP 외력 | User 102 기준 `[fx, fy, fz, tx, ty, tz]` |
+| `/robot/force_base` | `std_msgs/Float32MultiArray` | BASE 기준 TCP 외력 | DSR BASE 기준 외력 원본 표시용 |
+| `/robot/progress` | `std_msgs/Float32MultiArray` | 필기 진행률 `[완료 획, 전체 획]` | 완료 상태는 `/robot/status`의 `IDLE` 수신 시 확정 |
 
 #### 서비스
 
-| 서비스 | 타입 | 역할 |
-| :--- | :--- | :--- |
-| `/dsr01/task_manager/retry` | `std_srvs/Trigger` | 수동 복구 후 같은 웨이포인트로 작업 재시도 |
-| `/dsr01/motion/move_stop` | `dsr_msgs2/MoveStop` | 비상정지 시 진행 중 모션 정지 |
-| `/dsr01/motion/jog` | `dsr_msgs2/Jog` | HMI 수동 조그 명령 전달 |
+| 서비스 | 타입 | 역할 | 비고 |
+| :--- | :--- | :--- | :--- |
+| `/dsr01/task_manager/retry` | `std_srvs/Trigger` | 수동 복구 후 같은 웨이포인트로 작업 재시도 | `MANUAL_REQUIRED` 상태와 저장된 웨이포인트가 있을 때만 성공 |
+| `/dsr01/motion/move_stop` | `dsr_msgs2/MoveStop` | 비상정지 시 진행 중 모션 정지 | `DR_QSTOP` 모드로 fire-and-forget 호출 |
+| `/dsr01/motion/jog` | `dsr_msgs2/Jog` | HMI 수동 조그 명령 전달 | BASE 기준 태스크 조그 축으로 변환해 호출 |
 
 #### OnRobot RG2 그리퍼 폭 피드백
 
